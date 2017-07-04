@@ -1,5 +1,5 @@
 
-# mail_codec &emsp; [![Build Status](https://travis-ci.org/dathinab/simple_data_tests.svg?branch=master)](https://travis-ci.org/TODO/mail_codec)
+# mail_codec &emsp; [![Build Status](https://travis-ci.org/dathinab/mail_codec.svg?branch=master)](https://travis-ci.org/dathinab/mail_codec)
 
 **TODO**
 
@@ -8,7 +8,7 @@
 TODO
 
 
-Documentation can be [viewed on docs.rs](https://docs.rs/simple_data_tests).
+Documentation can be [viewed on docs.rs](https://docs.rs/mail-codec).
 
 
 ## License
