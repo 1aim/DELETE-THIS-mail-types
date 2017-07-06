@@ -71,13 +71,13 @@ impl SmtpDataEncoder {
     }
 
     //FIXME forbid writing cfws at begin of line
-    //FIXME change to `write_fws`
-    pub fn write_cfws( &mut self ) {
+    //FIXME add write_fws_with_value( c: char ) to write e.g. '\t'
+    pub fn write_fws(&mut self ) {
         self.write_char( AsciiChar::Space );
         self.last_cfws_pos = Some( self.inner.len()-1 )
     }
 
-    pub fn note_optional_cfws( &mut self ) {
+    pub fn note_optional_fws(&mut self ) {
         self.last_cfws_pos = Some( self.inner.len()-1 )
     }
 

@@ -1,4 +1,5 @@
 use std::path::{ Path, PathBuf };
+use std::ascii::AsciiExt;
 use std::fs::File;
 use std::io::{ Write, BufWriter, BufRead, BufReader, Error as IoError };
 use std::env;
@@ -15,11 +16,13 @@ fn generate_html_header<P: AsRef<Path>>( spec: P ) -> Result<(), Error> {
     let mut enum_output = BufWriter::new( File::create( out.join( "header_enum.rs.partial" ) )? );
     let mut encode_match_output = BufWriter::new( File::create( out.join( "encoder_match_cases.rs.partial" ) )? );
     let mut decode_match_output = BufWriter::new( File::create( out.join( "decoder_match_cases.rs.partial" ) )? );
+    let mut names_output = BufWriter::new( File::create( out.join( "header_enum_names.rs.partial" ) )? );
 
-    writeln!( &mut enum_output, "enum Header {{" )?;
+    writeln!( &mut enum_output, "pub enum Header {{" )?;
     writeln!( &mut encode_match_output,
-              "|header: &Header, encoder| -> Result<()> {{\nuse codec::SmtpDataEncodable;\nmatch *header {{")?;
-    writeln!( &mut decode_match_output, "|header_name| -> Result<()> {{ match header_name {{" )?;
+              "{{ fn fn_impl(header: &Header, encoder: &mut SmtpDataEncoder) -> Result<()> {{\nmatch *header {{")?;
+    writeln!( &mut decode_match_output, "{{ fn fn_impl(header_name: &str, data: &str) -> Result<Header> {{ match header_name {{" )?;
+    writeln!( &mut names_output, "{{ fn fn_impl(header: &Header) -> &AsciiStr {{ match *header {{" )?;
 
     let mut next_is_header = true;
     for line in BufReader::new( file ).lines() {
@@ -48,17 +51,46 @@ fn generate_html_header<P: AsRef<Path>>( spec: P ) -> Result<(), Error> {
             continue;
         }
 
+        assert!( is_valid_header_name( name ) );
+
         let enum_name = name.replace( "-", "" );
 
-        writeln!( &mut enum_output, "\t{}( {} ),", enum_name, rust_type )?;
-        writeln!( &mut encode_match_output, "\t{}( ref field ) => field.encode( encoder ),", enum_name )?;
+        writeln!( &mut enum_output,
+                  "\t{}( {} ),",
+                  enum_name, rust_type )?;
+
+        writeln!( &mut names_output,
+                  "\t{}( .. ) => unsafe {{ AsciiStr::from_ascii_unchecked( {:?} ) }},",
+                  enum_name, name )?;
+
+        writeln!( &mut encode_match_output,
+                  concat!( "\t{}( ref field ) => encode_header_helper(",
+                           " unsafe {{ AsciiStr::from_ascii_unchecked( {:?} ) }},",
+                           " field,",
+                           " encoder)," ),
+                  enum_name, name )?;
+
         writeln!( &mut decode_match_output,
-                  r#"\t{:?} => Self::{}( {}::decode( data )? ),"#, name, enum_name, rust_type )?;
+                  r"\t{:?} => Self::{}( {}::decode( data )? ),",
+                  name, enum_name, rust_type )?;
+
     }
 
+    writeln!( &mut enum_output,
+              "\tOther( HeaderName, Unstructured )" )?;
     writeln!( &mut enum_output, "}}" )?;
-    writeln!( &mut encode_match_output, "}} }}")?;
-    writeln!( &mut decode_match_output, "}} }}")?;
+
+    writeln!( &mut names_output,
+              "Other( ref name, .. ) => &*name" )?;
+    writeln!( &mut names_output, "}} }} fn_impl }}")?;
+
+    writeln!( &mut encode_match_output,
+              "\tOther( ref name, ref value ) => encode_header_helper( &*name, value, encoder )")?;
+    writeln!( &mut encode_match_output, "}} }} fn_impl }}")?;
+
+    writeln!( &mut decode_match_output,
+              r"\tname => Self::Other( HeaderName::new( name )?, Unstructured::decode( data )? )" )?;
+    writeln!( &mut decode_match_output, "}} }} fn_impl }}")?;
 
     Ok( () )
 }
@@ -80,4 +112,16 @@ impl From<VarError> for Error {
     fn from( err: VarError ) -> Error {
         Error::VarError( err )
     }
+}
+
+fn is_valid_header_name( name: &str ) -> bool {
+    name.as_bytes().iter().all( |b| {
+        match *b {
+            b'a'...b'z' |
+            b'A'...b'Z' |
+            b'0'...b'9' |
+            b'-' => true,
+            _ => false
+        }
+    })
 }

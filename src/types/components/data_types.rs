@@ -3,18 +3,22 @@
 use std::ops::Range;
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct Unstructured( Range<usize> );
+pub struct Word( pub Range<usize> );
+
+//FIXME when parsing make sure no controll character do appear
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+pub struct Unstructured( pub Range<usize> );
 
 #[derive(Debug,  Clone, Hash, PartialEq, Eq)]
 pub struct Address {
-    pub display_name: Option<DisplayName>,
+    pub display_name: Option<Phrase>,
     pub email: Email
 }
 
 ///
 /// Note: the vector in DisplayName SHOULD not be empty, use option to express optionality
 #[derive(Debug,  Clone, Hash, PartialEq, Eq)]
-pub struct DisplayName( pub Vec<Range<usize>> );
+pub struct Phrase(pub Vec<Word> );
 
 #[derive(Debug,  Clone, Hash, PartialEq, Eq)]
 pub struct Email { pub local: LocalPart, pub domain: Domain }
@@ -52,11 +56,11 @@ impl View for Email {
     }
 }
 
-impl View for DisplayName {
+impl View for Phrase {
     fn apply_on<'s,'out>( &'s self, matching_data: &'out str ) -> &'out str {
         match self.0.len() {
             0 => "",
-            x => &matching_data[Range { start: self.0[0].start, end: self.0[x-1].end } ]
+            x => &matching_data[Range { start: self.0[0].0.start, end: self.0[x-1].0.end } ]
         }
     }
 }
@@ -67,12 +71,24 @@ impl View for Address {
         let mut end = self.email.domain.0.end;
         if let Some( display_name ) = self.display_name.as_ref() {
             if let Some( first ) = display_name.0.first() {
-                start = first.start;
+                start = first.0.start;
                 // include trailing ">"
                 end += 1;
             }
         }
         &matching_data[Range { start, end }]
+    }
+}
+
+impl View for Unstructured {
+    fn apply_on<'s, 'out>( &'s self, matching_data: &'out str ) -> &'out str {
+        self.0.apply_on( matching_data )
+    }
+}
+
+impl View for Word {
+    fn apply_on<'s, 'out>( &'s self, matching_data: &'out str ) -> &'out str {
+        self.0.apply_on( matching_data )
     }
 }
 
@@ -112,7 +128,7 @@ mod test {
 
     #[test]
     fn display_name_view() {
-        let disp = DisplayName( vec![ 5..7, 9..10, 11..13 ] );
+        let disp = Phrase( vec![ Word( 5..7 ), Word( 9..10 ), Word( 11..13 ) ] );
         assert_eq!(
             "ab cd ef",
             disp.apply_on("Bcc: ab cd ef <q@e.f>")
@@ -137,7 +153,7 @@ mod test {
     #[test]
     fn address_view_with_display_name() {
         let addr = Address {
-            display_name: Some( DisplayName( vec![ 5..7, 9..10 ] ) ),
+            display_name: Some( Phrase( vec![ Word( 5..7 ), Word( 9..10 ) ] ) ),
             email: Email {
                 local: LocalPart( 12..14 ),
                 domain: Domain( 15..18 )
@@ -148,6 +164,28 @@ mod test {
             addr.apply_on( "Bcc: Ha  A <ab@c.e>" )
         );
     }
+
+
+    #[test]
+    fn unstructured_name_view() {
+        let text = "Subject: This is fun";
+        let disp = Unstructured( 9..text.len() );
+        assert_eq!(
+            "Tis is fun",
+            disp.apply_on( text )
+        )
+    }
+
+    #[test]
+    fn word_view() {
+        let text = " Abc ";
+        let disp = Word( 1..4 );
+        assert_eq!(
+            "Abc",
+            disp.apply_on( text )
+        )
+    }
+
 
 
 }

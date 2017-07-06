@@ -1,13 +1,13 @@
+use std::char;
+use std::ascii::AsciiExt;
+
 use ::ascii::{ AsciiChar, AsAsciiStr };
 
-
-
-use  types::components::data_types::*;
-
 use error::*;
-use types::shared::Item;
 use codec::SmtpDataEncoder;
 use codec::utf8_to_ascii::puny_code_domain;
+use types::components::data_types::*;
+use types::shared::Item;
 
 pub trait EncodeComponent {
     fn encode( &self, matching_data: &Item, encoder: &mut SmtpDataEncoder ) -> Result<()>;
@@ -17,7 +17,9 @@ impl EncodeComponent for Domain {
     //FIXME currently does not support domain literal form
     fn encode( &self, matching_data: &Item, encoder: &mut SmtpDataEncoder ) -> Result<()> {
         let data = self.apply_on( matching_data );
+        encoder.note_optional_fws();
         puny_code_domain(data, encoder );
+        encoder.note_optional_fws();
         Ok( () )
     }
 }
@@ -25,8 +27,11 @@ impl EncodeComponent for Domain {
 impl EncodeComponent for LocalPart {
     fn encode( &self, matching_data: &Item, encoder: &mut SmtpDataEncoder ) -> Result<()> {
         let data = self.apply_on( matching_data );
+        encoder.note_optional_fws();
         encoder.try_write_utf8_str( data )
-            .chain_err( || ErrorKind::NonEncodableComponents( "address/addr-spec/local-part", data.into() ) )
+            .chain_err( || ErrorKind::NonEncodableComponents( "address/addr-spec/local-part", data.into() ) )?;
+        encoder.note_optional_fws();
+        Ok( () )
     }
 }
 
@@ -39,24 +44,39 @@ impl EncodeComponent for Email {
     }
 }
 
-impl EncodeComponent for DisplayName {
+impl EncodeComponent for Phrase {
     fn encode( &self, matching_data: &Item, encoder: &mut SmtpDataEncoder ) -> Result<()> {
         let mut first = true;
         for word in self.0.iter() {
             if first { first = false; }
-                else {
-                    //display-name is = phrase = 1*word = atom = [CFWS] *atext [CFWS]
-                    encoder.write_cfws();
-                }
+            else {
+                //display-name is = phrase = 1*word = atom = [CFWS] *atext [CFWS]
+                encoder.write_fws();
+            }
+            word.encode( matching_data, encoder )?;
+        }
+        Ok( () )
+    }
+}
 
-            let data = word.apply_on( matching_data );
+impl EncodeComponent for Word {
+    fn encode( &self, matching_data: &Item, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+        let data = self.0.apply_on( matching_data );
+        encoder.note_optional_fws();
+        if data.starts_with( "\"" ) {
+            //FIXME we could "unquote" the string, split it in multiple words if nessesary and then encode it
+            //we can not encode quoted strings as quoting already counts as encoding
+            encoder.try_write_utf8_str( data )?
+        } else {
             //FIXME actually there might be some ascii chars we need to escape
             if let Ok( ascii ) = data.as_ascii_str() {
                 encoder.write_str( ascii );
             } else {
+                //FIXME do we need to check if it's a non-ascii
                 encoder.write_encoded_word( data )
             }
         }
+        encoder.note_optional_fws();
         Ok( () )
     }
 }
@@ -66,7 +86,7 @@ impl EncodeComponent for Address {
         if let Some( display_name ) = self.display_name.as_ref() {
             display_name.encode( matching_data, encoder )?;
 
-            encoder.write_cfws();
+            encoder.write_fws();
             encoder.write_char( AsciiChar::LessThan);
         }
 
@@ -74,6 +94,31 @@ impl EncodeComponent for Address {
 
         if self.display_name.is_some() {
             encoder.write_char( AsciiChar::GreaterThan );
+        }
+        Ok( () )
+    }
+}
+
+
+impl EncodeComponent for Unstructured {
+    fn encode( &self, matching_data: &Item, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+        //Note: the rfc 2047 does not directly state all use-cases of "unstructured" can be encoded
+        // with encoded word's, but it list practically all cases unstructured can appear in
+        let data = self.0.apply_on( matching_data );
+        //TODO allow the data to contains thinks like '\t' etc.
+        //FIXME do not replace any kind of whitespace with space
+        // this is necessary if we don't want to change the type of unstructured to Vec<Rang<usize>>
+        // and we also want to preserves whitespace structures in e.g. Subject lines
+        // only CRLFWS should map to WS as line breaking is our think
+        // not that WS are not all whitespaces, e.g. '\n' should not count into it and ascii only
+        // NOTE: do not use split_whitespaces as we want to preserve the number of whitespaces
+        for part in data.split( char::is_whitespace ) {
+            if let Ok( ascii_part ) = part.as_ascii_str() {
+                encoder.write_str( ascii_part );
+            } else {
+                encoder.write_encoded_word( part )
+            }
+            encoder.write_fws();
         }
         Ok( () )
     }
@@ -178,7 +223,7 @@ mod test {
         #[test]
         fn mixed() {
             let data = Item::from( "Hy|ä|moin" );
-            let display_name = DisplayName( vec![ 0..2, 3..5, 6..10 ] );
+            let display_name = Phrase( vec![ Word( 0..2 ), Word( 3..5 ), Word( 6..10 ) ] );
             let mut encoder = SmtpDataEncoder::new( true );
 
             display_name.encode( &data, &mut encoder ).expect( "encoding failed" );
@@ -212,7 +257,7 @@ mod test {
         fn with_dispaly_name() {
             let data = Item::from( "Liz|ab|d.e" );
             let address = Address {
-                display_name: Some( DisplayName( vec! [ 0..3 ] ) ),
+                display_name: Some( Phrase( vec! [ Word( 0..3 ) ] ) ),
                 email: Email {
                     local: LocalPart( 4..6 ),
                     domain: Domain( 7..10 ),

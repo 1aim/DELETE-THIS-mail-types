@@ -1,4 +1,6 @@
-use ascii::{ AsciiString, AsciiChar };
+use std::ops::Deref;
+
+use ascii::{ AsciiString, AsciiStr, AsciiChar };
 
 use codec::{ SmtpDataEncodable, SmtpDataEncoder };
 use error::*;
@@ -11,17 +13,22 @@ use error::*;
 pub struct HeaderName( AsciiString );
 
 impl HeaderName {
-    fn new( name: String ) -> Result<HeaderName> {
-        for char in name.iter() {
-            match char {
+    pub fn new( name: String ) -> Result<HeaderName> {
+        let mut ok = true;
+        for char in name.chars() {
+            let ok = match char {
                 'a'...'z' |
                 'A'...'Z' |
                 '0'...'9' |
                 '-' => {},
-                _ => return Err( ErrorKind::InvalidHeaderName( name ).into() )
-            }
+                _ => { ok = false; break; }
+            };
         }
-        HeaderName( unsafe { AsciiString::from_ascii_unchecked( name ) } )
+        if ok {
+            Ok( HeaderName( unsafe { AsciiString::from_ascii_unchecked( name ) } ) )
+        } else {
+            Err(ErrorKind::InvalidHeaderName(name).into())
+        }
     }
 }
 
@@ -31,5 +38,12 @@ impl SmtpDataEncodable for HeaderName {
         encoder.write_str( &*self.0 );
         encoder.write_char( AsciiChar::Colon );
         Ok( () )
+    }
+}
+
+impl Deref for HeaderName {
+    type Target = AsciiStr;
+    fn deref( &self ) -> &AsciiStr {
+        &*self.0
     }
 }

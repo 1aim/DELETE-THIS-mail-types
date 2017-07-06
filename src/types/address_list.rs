@@ -19,7 +19,7 @@ impl OptAddressList {
 impl AddressList {
 
     pub fn new_with_first( first: Address ) -> Self {
-        AddressList( vec![ first ] )
+        AddressList( OptAddressList( vec![ first ] ) )
     }
 
     pub fn new( list: Vec<Address> ) -> Result<Self> {
@@ -69,7 +69,7 @@ impl SmtpDataEncodable for OptAddressList {
             if first { first = false; }
             else {
                 encoder.write_char( AsciiChar::Comma );
-                encoder.write_cfws();
+                encoder.write_fws();
             }
             address.encode( encoder )?;
         }
@@ -104,7 +104,7 @@ mod test {
             ($name:ident, [$($addr:expr),*], $output:expr) => {
                 #[test]
                 fn $name() {
-                    let list = AddressList::new( vec![ $($addr),* ] );
+                    let list = AddressList::new( vec![ $($addr),* ] ).unwrap();
                     let mut encoder = SmtpDataEncoder::new( false );
                     list.encode( &mut encoder ).expect( "encoding failed" );
                     assert_eq!( $output, encoder.to_string() );

@@ -24,3 +24,21 @@ pub use self::header_name::HeaderName;
 
 mod date_time;
 pub use self::date_time::DateTime;
+
+mod mime;
+pub use self::mime::Mime;
+
+mod path;
+pub use self::path::Path;
+
+mod received_token;
+pub use self::received_token::ReceivedToken;
+
+mod text;
+pub use self::text::Text;
+
+mod transfer_encoding;
+pub use self::transfer_encoding::TransferEncoding;
+
+mod phrase_list;
+pub use self::phrase_list::PhraseList;

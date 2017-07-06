@@ -47,7 +47,10 @@ impl MessageIDList {
 impl SmtpDataEncodable for MessageIDList {
     fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
         for msg_id in self.0.iter() {
-            msg_id.encode( encoder )
+            msg_id.encode( encoder );
         }
+        Ok( () )
     }
 }
+
+//TODO for parsing we have to make sure to _require_ '<>' around the email

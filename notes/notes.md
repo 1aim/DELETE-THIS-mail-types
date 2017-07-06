@@ -127,8 +127,25 @@ Example mail structure:
     (image/png (Content-Disposition attachment) ...)
     (image/png (Content-Disposition attachment) ...))
 ```
-    
 
+
+# Attatchment
+
+proposed filenames for attachments can be given through parameters of the disposition header
+
+it does not allow non ascii character there!
+
+see rfc2231 for more information, it extends some part wrt.:
+    
+- splitting long parameters (e.g. long file names)
+- specifying language and character set
+- specifying language for encoded words
+
+# Encoded Words
+
+extended by rfc2231
+
+additional limits in header fields
 
 # Other
 
@@ -146,6 +163,30 @@ FWS -> (un-) foldable whitespace without comments
 5321, 5322, 6854, 3492, 2045, 2046, 2047, 4288,  4289, 2049, 6531, 5890
 
 make sure to not use the outdated versions
+
+
+# Parsing Notes
+
+be strict when parsing (e.g. only ws and printable in subject line)
+
+if "some other" strings should still be supported do not do zero
+copy, but instead add the data to a new buff _replacing invalid
+chars with replacement symbol or just stripping them_
+
+
+## Hot to handle `obs-` parsings
+
+we have to be able to parse mails with obsolete syntax (theoretically)
+but should never genrate such mails, the encder excepts its underlying
+data to be correct, but it might not be if we directly place `obs-`
+parsed data there. For many parts this is no problem as the
+`obs-` syntax is a lot about having FWS at other positions,
+_between components_ (so we won't have a problem with the encoder).
+Or some additional obsolete infromations (which we often/allways can just
+"skip" over). So we have to check if there are any braking cases and if
+we have to not zero copy them when parsing but instead transform them
+into a valide representation, in worst case we could add a `not_encodable`
+field to some structs.
 
 # TODO
 check if some parts are empty and error if encode is calde on them
