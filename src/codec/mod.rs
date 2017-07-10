@@ -78,7 +78,10 @@ impl SmtpDataEncoder {
     }
 
     pub fn note_optional_fws(&mut self ) {
-        self.last_cfws_pos = Some( self.inner.len()-1 )
+        self.last_cfws_pos = match self.inner.len() {
+            0 => None,
+            len =>  Some( len - 1 )
+        };
     }
 
     pub fn write_str( &mut self, str: &AsciiStr ) {

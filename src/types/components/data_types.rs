@@ -15,8 +15,8 @@ pub struct Address {
     pub email: Email
 }
 
-///
-/// Note: the vector in DisplayName SHOULD not be empty, use option to express optionality
+//TODO crate a VecGt1 vector with minimal length 1! (new(first), pop last fails etc.)
+// also use this for some of the other 1*xxx parts
 #[derive(Debug,  Clone, Hash, PartialEq, Eq)]
 pub struct Phrase(pub Vec<Word> );
 
@@ -171,7 +171,7 @@ mod test {
         let text = "Subject: This is fun";
         let disp = Unstructured( 9..text.len() );
         assert_eq!(
-            "Tis is fun",
+            "This is fun",
             disp.apply_on( text )
         )
     }

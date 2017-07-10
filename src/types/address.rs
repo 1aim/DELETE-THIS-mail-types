@@ -13,7 +13,11 @@ use types::components::behaviour::encode::EncodeComponent;
 
 pub struct Address {
     inner: Item,
-    component_slices: data_types::Address
+    component_slices: data_types::Address,
+    // give the parser some slack for some non valide but nevertheless occurring syntax, this
+    // include thing parsed through `obs-` grammar which can't be converted to valid grammar
+    // e.g. display-name-only/user-name-only style (e.g. `From: admin` )
+    //valid: bool
 }
 
 
@@ -182,13 +186,13 @@ mod test {
         }
     }
 
-    test_decode!(normal, r#"culone <culo@culetto>"#, check_addr,
+    test_decode!( normal, r#"culone <culo@culetto>"#, check_addr,
         user "culo",
         host "culetto",
         name "culone"
     );
 
-    test_decode!(normal2, r#"Max Musterman <ma.x@muster.man>"#, check_addr,
+    test_decode!( normal2, r#"Max Musterman <ma.x@muster.man>"#, check_addr,
         user "ma.x",
         host "muster.man",
         name "Max", "Musterman"
@@ -200,42 +204,39 @@ mod test {
         name "culone"
     );
 
-    //FIXME this is only valide in some positions, so instead use Option<Address> there
-//    test_decode!(null, r#"<>"#, check_addr,
-//        name None,
-//        user None,
-//        host None
-//    );
-
-    test_decode!(only_address, r#"culo@culetto"#, check_addr,
+    test_decode!( only_address, r#"culo@culetto"#, check_addr,
         user "culo",
         host "culetto",
         name
     );
 
-    test_decode!(only_address_brackets, r#"<culo@culetto>"#, check_addr,
+    test_decode!( only_address_brackets, r#"<culo@culetto>"#, check_addr,
         user "culo",
         host "culetto",
         name
     );
 
+    //FIXME this is not valid in the standard but does appear nevertheless
+    // support it as a "display name only" style, through it could
+    // also be a user name only style we never know if it's it
+    // ALSO DO NOT SUPPORT GENERATING IT, it's not valid at all
 //    test_decode!(only_user, r#"culo"#, check_addr,
 //        name None,
 //        user Some("culo"),
 //        host None
 //    );
 
-    test_encode!(utf8_in_name, addr! {
+    test_encode!( utf8_in_name, addr! {
         user "oa",
         host "o.a",
         name "aö"
-    }, "=?utf8?Q?a=C3=B6?= <oa@o.a>");
+    }, "=?utf8?Q?a=C3=B6?= <oa@o.a>" );
 
-    test_encode!(utf8_in_name2, addr! {
+    test_encode!( utf8_in_name2, addr! {
         user "oa",
         host "o.a",
         name "abc aö öa"
-    }, "abc =?utf8?Q?a=C3=B6?= =?utf8?Q?=C3=B6a?= <oa@o.a>");
+    }, "abc =?utf8?Q?a=C3=B6?= =?utf8?Q?=C3=B6a?= <oa@o.a>" );
 
     //test that "<3 <some@thing>" does not work
     //TODO more encoding tests
