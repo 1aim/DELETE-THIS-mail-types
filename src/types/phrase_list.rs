@@ -20,10 +20,10 @@ impl SmtpDataEncodable for PhraseList {
             return Err( ErrorKind::AtLastOneElementIsRequired.into() );
         }
         sep_for!{ phrase in self.component_slices.iter();
-            sep { encoder.write_char( AsciiChar::Comma ); }; {
+            sep { encoder.write_char( AsciiChar::Comma ) };
 
             phrase.encode( &self.inner, encoder )?;
-        }}
+        }
 
         Ok( () )
     }

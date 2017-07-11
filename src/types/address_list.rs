@@ -64,13 +64,11 @@ impl Deref for AddressList {
 
 impl SmtpDataEncodable for OptAddressList {
     fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
-        let mut first = true;
-        for address in self.0.iter() {
-            if first { first = false; }
-            else {
+        sep_for!{ address in self.0.iter();
+            sep {
                 encoder.write_char( AsciiChar::Comma );
                 encoder.write_fws();
-            }
+            };
             address.encode( encoder )?;
         }
         Ok( () )

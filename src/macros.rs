@@ -12,14 +12,14 @@ macro_rules! ascii_str {
 
 #[macro_export]
 macro_rules! sep_for {
-    ($var:ident in $iter:expr; sep $sep:block; $code:block ) => {{
+    ($var:ident in $iter:expr; sep $sep:block; $($rem:tt)* ) => {{
         let mut first = true;
         for $var in $iter {
             if first { first = false; }
             else {
                 $sep
             }
-            $code
+            $( $rem )*
         }
     }}
 }

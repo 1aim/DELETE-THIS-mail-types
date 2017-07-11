@@ -1,5 +1,5 @@
 use std::char;
-use std::ascii::AsciiExt;
+
 
 use ::ascii::{ AsciiChar, AsAsciiStr };
 
@@ -46,13 +46,9 @@ impl EncodeComponent for Email {
 
 impl EncodeComponent for Phrase {
     fn encode( &self, matching_data: &Item, encoder: &mut SmtpDataEncoder ) -> Result<()> {
-        let mut first = true;
-        for word in self.0.iter() {
-            if first { first = false; }
-            else {
-                //display-name is = phrase = 1*word = atom = [CFWS] *atext [CFWS]
-                encoder.write_fws();
-            }
+        sep_for!{ word in self.0.iter();
+            sep { encoder.write_fws() };
+
             word.encode( matching_data, encoder )?;
         }
         Ok( () )
