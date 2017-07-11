@@ -174,6 +174,20 @@ copy, but instead add the data to a new buff _replacing invalid
 chars with replacement symbol or just stripping them_
 
 
+# Non-utf8 Non-Ascci bytes in Mail body
+
+The mail body can contain non-utf8, non-ascii data (e.g.
+utf16 data, images etc.) WITHOUT base64 encoding if
+8BITMIME is supported (note there is also BINARY and CHUNKING)
+
+smtp still considers _the bytes_ corresponding to CR LF and DOT special.
+
+- there is a line length limit, lines terminate with b'CRLF'
+- b'.CRLF' does sill end the body (if preceeded by CRLF, or body starts with it)
+    - so dot-staching is still done on protocol level
+    
+
+
 ## Hot to handle `obs-` parsings
 
 we have to be able to parse mails with obsolete syntax (theoretically)
