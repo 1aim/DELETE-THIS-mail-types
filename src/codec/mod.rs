@@ -34,22 +34,23 @@ impl Utf8State {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-pub struct SmtpDataEncoder {
+pub struct MailEncoder {
     inner: String,
     current_line_length: usize,
     last_cfws_pos: Option<usize>,
-    smtputf8_support: Utf8State
+    //FIXME change to _8bit_support as this is the thinks which matters
+    utf8_support: Utf8State
 }
 
-impl SmtpDataEncoder {
-    pub fn new(smtputf8_supported: bool) -> SmtpDataEncoder {
-        let smtputf8_supported = if smtputf8_supported {
+impl MailEncoder {
+    pub fn new(utf8_supported: bool) -> MailEncoder {
+        let utf8_supported = if utf8_supported {
             Utf8State::Supported
         } else {
             Utf8State::Unsupported
         };
-        SmtpDataEncoder {
-            smtputf8_support: smtputf8_supported,
+        MailEncoder {
+            utf8_support: utf8_supported,
             inner: String::new(),
             current_line_length: 0,
             last_cfws_pos: None
@@ -94,11 +95,11 @@ impl SmtpDataEncoder {
 
     pub fn try_write_utf8_str( &mut self, str: &str ) -> Result<()> {
         use self::Utf8State::*;
-        match self.smtputf8_support {
+        match self.utf8_support {
             Unsupported if !str.is_ascii() =>
                 return Err( ErrorKind::TriedWritingUtf8IntoAsciiData.into() ),
             Supported if !str.is_ascii() =>
-                self.smtputf8_support = Used,
+                self.utf8_support = Used,
             _ => {}
         }
         self.write_str_unchecked( str );
@@ -150,7 +151,7 @@ impl SmtpDataEncoder {
             }
 
             // could be utf8 under some circumstances
-            if self.smtputf8_support.is_used() {
+            if self.utf8_support.is_used() {
                 self.current_line_length = self.inner[cfws_pos+2..].chars().count();
             } else {
                 self.current_line_length = self.inner.len() - (cfws_pos+2)
@@ -162,12 +163,12 @@ impl SmtpDataEncoder {
         self.current_line_length
     }
 
-    pub fn smtputf8_support( &self ) -> Utf8State {
-        self.smtputf8_support
+    pub fn utf8_support(&self ) -> Utf8State {
+        self.utf8_support
     }
 
     pub fn into_ascii_string( self ) -> StdResult<AsciiString, Self> {
-        if self.smtputf8_support.is_used() {
+        if self.utf8_support.is_used() {
             Err( self )
         } else {
             Ok( unsafe { AsciiString::from_ascii_unchecked( self.inner ) } )
@@ -178,14 +179,14 @@ impl SmtpDataEncoder {
 
 
 
-impl Into<String> for SmtpDataEncoder {
+impl Into<String> for MailEncoder {
     fn into(self) -> String {
         self.inner
     }
 }
 
 
-impl fmt::Display for SmtpDataEncoder {
+impl fmt::Display for MailEncoder {
 
     fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
         write!( f, "{}", self.inner.as_str() )
@@ -193,12 +194,12 @@ impl fmt::Display for SmtpDataEncoder {
 }
 
 
-pub trait SmtpDataEncodable {
+pub trait MailEncodable {
 
-    fn encode( &self, &mut SmtpDataEncoder ) -> Result<()>; //possible Cow later on
+    fn encode( &self, &mut MailEncoder ) -> Result<()>; //possible Cow later on
 }
 
-pub trait SmtpDataDecodable: Sized {
+pub trait MailDecodable: Sized {
 
     //FIXME maybe &[u8]
     fn decode( &str ) -> Result<Self>; //maybe AsRef<AsciiStr>
@@ -209,7 +210,7 @@ pub trait SmtpDataDecodable: Sized {
 #[cfg(unimplemented_test)]
 mod test {
 
-    use super::SmtpDataEncoder;
+    use super::MailEncoder;
 
     // test line length check
 
@@ -220,7 +221,7 @@ mod test {
         ($name:ident, $utf8:expr, $inp:expr, $out:expr) => {
             #[test]
             fn $name() {
-                let mut encoder = SmtpDataEncoder::new( $utf8 );
+                let mut encoder = MailEncoder::new( $utf8 );
                 encoder.write_encoded_word( $inp );
                 assert_eq!(
                     $out,

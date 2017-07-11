@@ -1,8 +1,8 @@
 use ascii::{ AsciiString, AsAsciiStr };
-use codec::SmtpDataEncoder;
+use codec::MailEncoder;
 use quoted_printable::encode;
 
-pub fn q_encode( input: &str , encoder: &mut SmtpDataEncoder ) {
+pub fn q_encode( input: &str , encoder: &mut MailEncoder ) {
     //TODO I suspect the `quoted_printable` crate is not
     // completely correct wrt. to some aspects, have to
     // check this
@@ -12,7 +12,7 @@ pub fn q_encode( input: &str , encoder: &mut SmtpDataEncoder ) {
     encoder.write_str( &*asciied )
 }
 
-pub fn puny_code_domain(_input: &str, _encoder: &mut SmtpDataEncoder ) {
+pub fn puny_code_domain(_input: &str, _encoder: &mut MailEncoder ) {
     if let Ok( val ) = _input.as_ascii_str() {
         _encoder.write_str( val )
     } else {

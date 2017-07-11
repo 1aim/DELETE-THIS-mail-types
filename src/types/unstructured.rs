@@ -2,7 +2,7 @@ use error::*;
 use super::shared::Item;
 use super::components::data_types;
 use super::components::behaviour::encode::EncodeComponent;
-use codec::{ SmtpDataEncoder, SmtpDataEncodable };
+use codec::{ MailEncoder, MailEncodable };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Unstructured {
@@ -11,8 +11,8 @@ pub struct Unstructured {
     component_slices: data_types::Unstructured
 }
 
-impl SmtpDataEncodable for Unstructured {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for Unstructured {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         self.component_slices.encode( &self.inner, encoder )
     }
 }

@@ -1,7 +1,7 @@
 use ascii::AsciiChar;
 
 use error::*;
-use codec::{ SmtpDataEncoder, SmtpDataEncodable };
+use codec::{ MailEncoder, MailEncodable };
 use super::shared::Item;
 use super::components::data_types::Email;
 use super::components::behaviour::encode::EncodeComponent;
@@ -13,8 +13,8 @@ pub struct Path {
 }
 
 
-impl SmtpDataEncodable for Path {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for Path {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         encoder.note_optional_fws();
         encoder.write_char( AsciiChar::LessThan );
         if let &Some( ref email ) = &self.component_slices {

@@ -4,7 +4,7 @@ use ascii::{  AsciiChar, AsciiStr };
 use error::*;
 use super::address_list_header;
 use types::{ AddressList };
-use codec::{ SmtpDataDecodable, SmtpDataEncodable, SmtpDataEncoder };
+use codec::{ MailDecodable, MailEncodable, MailEncoder };
 
 pub struct Bcc( AddressList );
 
@@ -14,13 +14,13 @@ impl Header for Bcc {
     }
 }
 
-impl SmtpDataEncodable for Bcc {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for Bcc {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         address_list_header::encode( Self::name(), &self.0, encoder )
     }
 }
 
-impl SmtpDataDecodable for Bcc {
+impl MailDecodable for Bcc {
 
     fn decode( _encoded: &str ) -> Result<Bcc> {
         unimplemented!();

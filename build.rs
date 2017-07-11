@@ -20,7 +20,7 @@ fn generate_html_header<P: AsRef<Path>>( spec: P ) -> Result<(), Error> {
 
     writeln!( &mut enum_output, "pub enum Header {{" )?;
     writeln!( &mut encode_match_output,
-              "{{ fn fn_impl(header: &Header, encoder: &mut SmtpDataEncoder) -> Result<()> {{\nmatch *header {{")?;
+              "{{ fn fn_impl(header: &Header, encoder: &mut MailEncoder) -> Result<()> {{\nmatch *header {{")?;
     writeln!( &mut decode_match_output, "{{ fn fn_impl(header_name: &str, data: &str) -> Result<Header> {{ match header_name {{" )?;
     writeln!( &mut names_output, "{{ fn fn_impl(header: &Header) -> &AsciiStr {{ match *header {{" )?;
 

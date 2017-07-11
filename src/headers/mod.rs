@@ -11,7 +11,7 @@ use types::{
 
 };
 
-use codec::{  SmtpDataEncoder, SmtpDataEncodable };
+use codec::{  MailEncoder, MailEncodable };
 
 
 include! { concat!( env!( "OUT_DIR" ), "/header_enum.rs.partial" )  }
@@ -27,9 +27,9 @@ impl Header {
 }
 
 
-impl SmtpDataEncodable for Header {
+impl MailEncodable for Header {
 
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         use self::Header::*;
         //a match with arms like: `Date( ref field ) => encoder_header_helper( "Date", field, encoder ),`
         let fn_impl = include!( concat!( env!( "OUT_DIR", ), "/encoder_match_cases.rs.partial" ) );
@@ -37,8 +37,8 @@ impl SmtpDataEncodable for Header {
     }
 }
 
-fn encode_header_helper<T: SmtpDataEncodable>(
-    name: &AsciiStr, encodable: &T, encoder: &mut SmtpDataEncoder
+fn encode_header_helper<T: MailEncodable>(
+    name: &AsciiStr, encodable: &T, encoder: &mut MailEncoder
 ) -> Result<()> {
     encoder.write_str( name );
     encoder.write_char( AsciiChar::Colon );

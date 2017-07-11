@@ -3,7 +3,7 @@ use ascii::AsciiStr;
 
 use error::*;
 use types::shared::Item;
-use codec::{SmtpDataDecodable, SmtpDataEncodable, SmtpDataEncoder};
+use codec::{MailDecodable, MailEncodable, MailEncoder};
 
 
 use types::components::data_types;
@@ -41,14 +41,14 @@ impl Address {
 
 }
 
-impl SmtpDataEncodable for Address {
+impl MailEncodable for Address {
 
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         self.component_slices.encode( &self.inner, encoder )
     }
 }
 
-impl SmtpDataDecodable for Address {
+impl MailDecodable for Address {
 
     fn decode( _src: &str ) -> Result<Self> {
         unimplemented!();
@@ -60,7 +60,7 @@ impl SmtpDataDecodable for Address {
 impl fmt::Debug for Address {
     //use encode and convert to String
     fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
-        let mut encoder = SmtpDataEncoder::new( true );
+        let mut encoder = MailEncoder::new( true );
         if let Err(_) = self.encode( &mut encoder ) {
             //FIXME warn!
             return Err( fmt::Error )
@@ -79,7 +79,7 @@ mod test {
     use ascii::AsAsciiStr;
 
     use super::super::components::{ data_types as address };
-    use codec::{ SmtpDataDecodable, SmtpDataEncodable, SmtpDataEncoder };
+    use codec::{ MailDecodable, MailEncodable, MailEncoder };
     use super::Address;
 
     macro_rules! check_addr {
@@ -163,7 +163,7 @@ mod test {
             #[test]
             fn $tname() {
                 let address: Address = $input;
-                let mut encoder = SmtpDataEncoder::new( $utf8 );
+                let mut encoder = MailEncoder::new( $utf8 );
                 address.encode( &mut encoder ).unwrap();
 
                 assert_eq!(

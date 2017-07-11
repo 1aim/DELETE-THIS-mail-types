@@ -2,7 +2,7 @@ use ascii::{ AsciiString, AsciiStr };
 
 use std::ops::Deref;
 use error::*;
-use codec::{ SmtpDataEncoder, SmtpDataEncodable };
+use codec::{ MailEncoder, MailEncodable };
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TransferEncoding {
@@ -18,8 +18,8 @@ pub enum TransferEncoding {
     Other( Token ),
 }
 
-impl SmtpDataEncodable for TransferEncoding {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for TransferEncoding {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         use self::TransferEncoding::*;
         match *self {
             _7Bit => encoder.write_str( ascii_str! { _7 b i t } ),
@@ -46,9 +46,9 @@ impl Token {
     }
 }
 
-impl SmtpDataEncodable for Token {
+impl MailEncodable for Token {
 
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         encoder.write_str( &*self.0 );
         Ok( () )
     }

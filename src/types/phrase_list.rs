@@ -3,7 +3,7 @@ use std::ops::Range;
 use ascii::AsciiChar;
 
 use error::*;
-use codec::{ SmtpDataEncoder, SmtpDataEncodable };
+use codec::{ MailEncoder, MailEncodable };
 use super::shared::Item;
 use super::components::data_types::Phrase;
 use super::components::behaviour::encode::EncodeComponent;
@@ -14,8 +14,8 @@ pub struct PhraseList {
     component_slices: Vec<Phrase>
 }
 
-impl SmtpDataEncodable for PhraseList {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for PhraseList {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         if self.component_slices.len() == 0 {
             return Err( ErrorKind::AtLastOneElementIsRequired.into() );
         }

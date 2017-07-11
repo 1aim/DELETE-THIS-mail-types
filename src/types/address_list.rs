@@ -2,7 +2,7 @@ use std::ops::{ Deref, DerefMut };
 
 use error::*;
 use ascii::AsciiChar;
-use codec::{ SmtpDataEncoder, SmtpDataDecodable, SmtpDataEncodable };
+use codec::{ MailEncoder, MailDecodable, MailEncodable };
 
 use super::address::Address;
 
@@ -62,8 +62,8 @@ impl Deref for AddressList {
 
 
 
-impl SmtpDataEncodable for OptAddressList {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for OptAddressList {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         sep_for!{ address in self.0.iter();
             sep {
                 encoder.write_char( AsciiChar::Comma );
@@ -75,13 +75,13 @@ impl SmtpDataEncodable for OptAddressList {
     }
 }
 
-impl SmtpDataEncodable for AddressList {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for AddressList {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         self.0.encode( encoder )
     }
 }
 
-impl SmtpDataDecodable for AddressList {
+impl MailDecodable for AddressList {
     fn decode( data: &str ) -> Result<Self> {
         unimplemented!();
     }
@@ -103,7 +103,7 @@ mod test {
                 #[test]
                 fn $name() {
                     let list = AddressList::new( vec![ $($addr),* ] ).unwrap();
-                    let mut encoder = SmtpDataEncoder::new( false );
+                    let mut encoder = MailEncoder::new( false );
                     list.encode( &mut encoder ).expect( "encoding failed" );
                     assert_eq!( $output, encoder.to_string() );
                 }

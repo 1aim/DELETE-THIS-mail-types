@@ -1,4 +1,4 @@
-use codec::{ SmtpDataEncoder, SmtpDataEncodable };
+use codec::{ MailEncoder, MailEncodable };
 
 use error::*;
 use super::shared::Item;
@@ -18,8 +18,8 @@ pub struct ReceivedToken {
     component_slices: Variant
 }
 
-impl SmtpDataEncodable for ReceivedToken {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for ReceivedToken {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         use self::Variant::*;
         match self.component_slices {
             Word( ref word ) => word.encode( &self.inner, encoder ),

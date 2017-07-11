@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use ascii::{ AsciiString, AsciiStr, AsciiChar };
 
-use codec::{ SmtpDataEncodable, SmtpDataEncoder };
+use codec::{ MailEncodable, MailEncoder };
 use error::*;
 // we need this for the `Other` and `ContentTypeExtension`
 // cases when they are used for generating mails
@@ -33,8 +33,8 @@ impl HeaderName {
 }
 
 
-impl SmtpDataEncodable for HeaderName {
-    fn encode( &self, encoder: &mut SmtpDataEncoder ) -> Result<()> {
+impl MailEncodable for HeaderName {
+    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
         encoder.write_str( &*self.0 );
         encoder.write_char( AsciiChar::Colon );
         Ok( () )
