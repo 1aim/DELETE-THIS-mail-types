@@ -65,7 +65,8 @@ impl fmt::Debug for Address {
             //FIXME warn!
             return Err( fmt::Error )
         }
-        write!( f, "{}", encoder )
+        let encoded_bytes: Vec<_> = encoder.into();
+        write!( f, "{}", String::from_utf8_lossy( &*encoded_bytes ) )
     }
 }
 

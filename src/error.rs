@@ -14,7 +14,7 @@ error_chain! {
             display( "can not encode the {} component with value {:?}", component, data )
         }
 
-        TriedWritingUtf8IntoAsciiData {
+        TriedWriting8BitBytesInto7BitData {
             description(
                 "the program tried to write a non ascii string while smtputf8 was not supported" )
         }

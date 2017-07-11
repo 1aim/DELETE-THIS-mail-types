@@ -35,11 +35,20 @@ impl Bits8State {
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MailEncoder {
-    inner: String,
-    current_line_length: usize,
+    inner: Vec<u8>,
+    current_line_byte_length: usize,
     last_cfws_pos: Option<usize>,
     //FIXME change to _8bit_support as this is the thinks which matters
     bits8_support: Bits8State
+}
+
+fn is_7bit_data( data: &[u8] ) -> bool {
+    for byte in data {
+        if byte & 128 > 0 {
+            return false;
+        }
+    }
+    true
 }
 
 impl MailEncoder {
@@ -51,8 +60,8 @@ impl MailEncoder {
         };
         MailEncoder {
             bits8_support: bits8_supported,
-            inner: String::new(),
-            current_line_length: 0,
+            inner: Vec::new(),
+            current_line_byte_length: 0,
             last_cfws_pos: None
         }
     }
@@ -63,10 +72,10 @@ impl MailEncoder {
     // additional properties for write_encoded_word ( max word length of 75 for header )
 
     pub fn write_new_line(&mut self ) {
-        if self.current_line_length != 0 {
+        if self.current_line_byte_length != 0 {
             self.write_char( AsciiChar::CarriageReturn );
             self.write_char( AsciiChar::LineFeed );
-            self.current_line_length = 0;
+            self.current_line_byte_length = 0;
             self.last_cfws_pos = None;
         }
     }
@@ -86,41 +95,41 @@ impl MailEncoder {
     }
 
     pub fn write_str( &mut self, str: &AsciiStr ) {
-        self.write_str_unchecked( str.as_str() );
+        self.write_data_unchecked( str.as_bytes() );
     }
 
     pub fn write_char( &mut self, char: AsciiChar ) {
-        self.write_char_unchecked( char.as_char() );
+        self.write_byte_unchecked( char.as_byte() );
     }
 
-    pub fn try_write_bits8_str( &mut self, str: &str ) -> Result<()> {
+    pub fn try_write_8bit_data( &mut self, data: &[u8] ) -> Result<()> {
         use self::Bits8State::*;
         match self.bits8_support {
-            Unsupported if !str.is_ascii() =>
-                return Err( ErrorKind::TriedWritingUtf8IntoAsciiData.into() ),
-            Supported if !str.is_ascii() =>
+            Unsupported if !is_7bit_data( data ) =>
+                return Err( ErrorKind::TriedWriting8BitBytesInto7BitData.into() ),
+            Supported if !is_7bit_data( data ) =>
                 self.bits8_support = Used,
             _ => {}
         }
-        self.write_str_unchecked( str );
+        self.write_data_unchecked( data );
         Ok( () )
     }
 
-    fn write_char_unchecked( &mut self, char: char ) {
+    fn write_byte_unchecked(&mut self, byte: u8 ) {
         //FIXME: potentially keep track of "line ending state" to prevent rogue '\r' '\n'
         //THIS IS THE ONLY FUNCTION WHICH SHOULD WRITE TO self.inner!!
-        self.inner.push( char );
-        self.current_line_length += 1;
-        if char == '\n' && self.inner.chars().last().unwrap() == '\r' {
-            self.current_line_length = 0;
+        self.inner.push( byte );
+        self.current_line_byte_length += 1;
+        if byte == b'\n' && *self.inner.last().unwrap() == b'\r' {
+            self.current_line_byte_length = 0;
             self.last_cfws_pos = None;
         }
     }
 
-    fn write_str_unchecked(&mut self, str: &str ) {
-        for char in str.chars() {
+    fn write_data_unchecked(&mut self, data: &[u8] ) {
+        for byte in data {
             // we HAVE TO call Self::write_char_unchecked
-            self.write_char_unchecked( char );
+            self.write_byte_unchecked( *byte );
         }
     }
 
@@ -144,23 +153,19 @@ impl MailEncoder {
         if let Some( cfws_pos ) = self.last_cfws_pos {
             self.last_cfws_pos = None;
 
-            if self.inner.as_bytes()[cfws_pos] == 0x20 {
-                self.inner.insert_str( cfws_pos, "\r\n" );
+            if self.inner[cfws_pos] == b' ' {
+                insert_bytes(&mut self.inner, cfws_pos, b"\r\n" );
             } else {
-                self.inner.insert_str( cfws_pos, "\r\n " );
+                insert_bytes(&mut self.inner, cfws_pos, b"\r\n " );
             }
 
             // could be bits8 under some circumstances
-            if self.bits8_support.is_used() {
-                self.current_line_length = self.inner[cfws_pos+2..].chars().count();
-            } else {
-                self.current_line_length = self.inner.len() - (cfws_pos+2)
-            }
+            self.current_line_byte_length = self.inner.len() - (cfws_pos + 2)
         }
     }
 
-    pub fn current_line_length( &self ) -> usize {
-        self.current_line_length
+    pub fn current_line_byte_length(&self ) -> usize {
+        self.current_line_byte_length
     }
 
     pub fn bits8_support(&self ) -> Bits8State {
@@ -177,21 +182,33 @@ impl MailEncoder {
 
 }
 
+//modified, origin is:
+// https://github.com/rust-lang/rust/blob/2fbba5bdbadeef403a64e9e1568cdad225cbcec1/src/liballoc/string.rs
+fn insert_bytes(vec: &mut Vec<u8> , idx: usize, bytes: &[u8]) {
+    use std::ptr;
+    let len = vec.len();
+    let amount = bytes.len();
+    vec.reserve(amount);
+
+    unsafe  {
+        ptr::copy( vec.as_ptr().offset( idx as isize ),
+                  vec.as_mut_ptr().offset( (idx + amount) as isize ),
+                  len - idx );
+        ptr::copy( bytes.as_ptr(),
+                   vec.as_mut_ptr().offset( idx as isize ),
+                   amount );
+
+        vec.set_len( len + amount );
+    }
+}
 
 
-impl Into<String> for MailEncoder {
-    fn into(self) -> String {
+impl Into<Vec<u8>> for MailEncoder {
+    fn into(self) -> Vec<u8> {
         self.inner
     }
 }
 
-
-impl fmt::Display for MailEncoder {
-
-    fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
-        write!( f, "{}", self.inner.as_str() )
-    }
-}
 
 
 pub trait MailEncodable {

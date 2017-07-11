@@ -28,7 +28,7 @@ impl EncodeComponent for LocalPart {
     fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
         let data = self.apply_on( matching_data );
         encoder.note_optional_fws();
-        encoder.try_write_bits8_str( data )
+        encoder.try_write_8bit_data( data.as_bytes() )
             .chain_err( || ErrorKind::NonEncodableComponents( "address/addr-spec/local-part", data.into() ) )?;
         encoder.note_optional_fws();
         Ok( () )
@@ -62,7 +62,7 @@ impl EncodeComponent for Word {
         if data.starts_with( "\"" ) {
             //FIXME we could "unquote" the string, split it in multiple words if nessesary and then encode it
             //we can not encode quoted strings as quoting already counts as encoding
-            encoder.try_write_bits8_str( data )?
+            encoder.try_write_8bit_data( data.as_bytes() )?
         } else {
             //FIXME actually there might be some ascii chars we need to escape
             if let Ok( ascii ) = data.as_ascii_str() {
@@ -141,8 +141,10 @@ mod test {
 
                     local_part.encode( &data, &mut encoder ).expect( "encoding not to fail" );
 
-                    assert_eq!( _data, encoder.to_string() );
-                    assert_eq!( $state, encoder.bits8_support() )
+                    assert_eq!( $state, encoder.bits8_support() );
+                    let encoded_bytes: Vec<u8> = encoder.into();
+                    let expected_bytes: Vec<u8> = _data.into();
+                    assert_eq!( expected_bytes, encoded_bytes );
 
                 }
             }
@@ -208,7 +210,8 @@ mod test {
 
             email.encode( &data, &mut encoder ).expect( "encoding failed" );
 
-            assert_eq!( "ab@d.e", encoder.to_string() )
+            let encoded_bytes: Vec<u8> = encoder.into();
+            assert_eq!( "ab@d.e", String::from_utf8_lossy( &*encoded_bytes ) );
         }
     }
 
@@ -224,8 +227,9 @@ mod test {
 
             display_name.encode( &data, &mut encoder ).expect( "encoding failed" );
 
-            assert_eq!( "Hy =?utf8?Q?=C3=A4?= moin", encoder.to_string() );
             assert_eq!(Bits8State::Supported, encoder.bits8_support() );
+            let encoded_bytes: Vec<u8> = encoder.into();
+            assert_eq!( "Hy =?utf8?Q?=C3=A4?= moin", String::from_utf8_lossy( &*encoded_bytes ) );
         }
     }
 
@@ -246,7 +250,8 @@ mod test {
 
             address.encode( &data, &mut encoder ).expect( "encoding failed" );
 
-            assert_eq!( "ab@d.e", encoder.to_string() );
+            let encoded_bytes: Vec<_> = encoder.into();
+            assert_eq!( "ab@d.e", String::from_utf8_lossy( &*encoded_bytes ) );
         }
 
         #[test]
@@ -264,7 +269,8 @@ mod test {
 
             address.encode( &data, &mut encoder ).expect( "encoding failed" );
 
-            assert_eq!( "Liz <ab@d.e>", encoder.to_string() );
+            let encoded_bytes: Vec<_> = encoder.into();
+            assert_eq!( "Liz <ab@d.e>", String::from_utf8_lossy( &*encoded_bytes ) );
 
         }
     }

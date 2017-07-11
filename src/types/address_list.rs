@@ -105,7 +105,8 @@ mod test {
                     let list = AddressList::new( vec![ $($addr),* ] ).unwrap();
                     let mut encoder = MailEncoder::new( false );
                     list.encode( &mut encoder ).expect( "encoding failed" );
-                    assert_eq!( $output, encoder.to_string() );
+                    let encoded_bytes: Vec<_> = encoder.into();
+                    assert_eq!( $output, String::from_utf8_lossy( &*encoded_bytes ) );
                 }
             }
         }
