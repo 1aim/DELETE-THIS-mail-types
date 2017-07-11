@@ -1,6 +1,3 @@
-use ascii::AsciiStr;
-use codec::{ SmtpDataEncodable, SmtpDataDecodable };
-
 
 pub mod shared;
 

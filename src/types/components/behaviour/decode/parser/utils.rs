@@ -12,9 +12,8 @@ macro_rules! my_named {
     );
     ($name:ident<$o:ty>, $submac:ident!( $($args:tt)* )) => (
         //FIXME replace u32 with custom error e.g. quick_error{...}
-        use ::nom::IResult;
         #[allow(unused_variables)]
-        pub fn $name<'a>( input: Slice<'a> ) -> IResult<Slice<'a>, $o, u32> {
+        pub fn $name<'a>( input: Slice<'a> ) -> ::nom::IResult<Slice<'a>, $o, u32> {
             $submac!( input, $($args)* )
         }
     );
@@ -69,3 +68,24 @@ macro_rules! postceded(
         postceded!($i, call!($f), call!($g));
     };
 );
+
+pub fn is_ws(ch: char) -> bool {
+    unimplemented!();
+}
+
+pub fn is_ctext(ch: char) -> bool {
+    unimplemented!();
+}
+
+pub fn is_vchar(ch: char) -> bool {
+    unimplemented!();
+}
+
+pub fn is_atext(ch: char) -> bool {
+    unimplemented!();
+}
+
+pub fn is_qtext(ch: char) -> bool {
+    unimplemented!();
+}
+

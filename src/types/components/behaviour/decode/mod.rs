@@ -25,8 +25,8 @@ trait DecodeComponent: Sized {
 impl DecodeComponent for Domain {
 
     //FIXME support domain-literal / obs-domain
-    fn parse( data: &[u8] ) -> Result<Self> {
-
+    fn parse( _data: &[u8] ) -> Result<Self> {
+        Err(ErrorKind::Msg("yo".into()).into())
     }
 }
 

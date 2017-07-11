@@ -1,26 +1,23 @@
-use std::ops::Range;
-use nom::{ traits as nom_traits };
-
 use types::components::data_types::*;
 use self::slice::Slice;
+use self::utils::{ is_ws, is_ctext, is_vchar, is_atext, is_qtext };
 
 #[macro_use]
 mod utils;
 
+
 mod slice;
 
 
-my_names!( fws, //obs-fws
+my_named!( fws, //obs-fws
     recognize!(
-        do_parse!(
-            opt!( do_parse!(
-                take_while!( is_ws ) >>
-                char!( '\r' ) >>
-                char!( '\n' ) >>
-                ()
-            ) ) >>
-            take_while1!( is_ws ) >>
-            ()
+        tuple!(
+            opt!( tuple!(
+                take_while!( is_ws ),
+                char!( '\r' ),
+                char!( '\n' )
+            ) ),
+            take_while1!( is_ws )
         )
     )
 );
@@ -32,9 +29,9 @@ my_named!( comment< Slice >,
             many0!( preceded! (
                 opt!( fws ),
                 alt!(
-                    verify_char( |ch| is_ctext ) => { void() } |
-                    quoted_pair =>  { void() } |
-                    comment => { void() }
+                    verify_char!( is_ctext ) => { void!() } |
+                    quoted_pair =>  { void!() } |
+                    comment => { void!() }
                 )
             ) ),
             opt!( fws )
@@ -43,18 +40,19 @@ my_named!( comment< Slice >,
     )
 );
 
-my_named!( quoted_pair,
+my_named!( quoted_pair<char>,
     preceded!(
         char!( '\\' ),
-        verify_char!( |ch| ch = ' ' || is_vchar( ch ) )
+        verify_char!( |ch| ch == ' ' || is_vchar( ch ) )
     )
 );
+
 
 my_named!( cfws< Vec< Slice > >,
     alt!(
         fws => { |_| vec![] } |
         postceded!(
-            many1( preceding!( opt!( fws ), comment ) ),
+            many1!( preceded!( opt!( fws ), comment ) ),
             opt!( fws )
         )
     )
@@ -63,7 +61,7 @@ my_named!( cfws< Vec< Slice > >,
 my_named!( dot_atom_text,
     recognize!( tuple!(
         take_while1!( is_atext ),
-        many0!( preceding!(
+        many0!( preceded!(
             char!( '.' ),
             take_while1!( is_atext )
         ) )
@@ -89,8 +87,8 @@ my_named!( quoted_string,
                 preceded!(
                     opt!( fws ),
                     alt!(
-                        quoted_pair => { void() } |
-                        take_while1!( is_qtext ) => { void() }
+                        quoted_pair => { void!() } |
+                        take_while1!( is_qtext ) => { void!() }
                     )
                 )
             ),
@@ -114,7 +112,7 @@ my_named!( domain< Domain >,
 
 my_named!( local_part< LocalPart >,
     map!(
-        alt!( dot_atom | quoted_string ) //| obs_local_part )),
+        alt!( dot_atom | quoted_string ), //| obs_local_part )),
         |slice| {
             LocalPart( slice.as_base_range() )
         }
@@ -137,7 +135,7 @@ my_named!( email< Email >,
 
 my_named!( named_address< Address >,
     do_parse!(
-        dname: opt!( display_name ) >>
+        dname: opt!( phrase ) >>
         opt!( cfws ) >>
         char!( '<' ) >>
         addr: email >>
@@ -163,7 +161,7 @@ my_named!( mailbox_list< Vec< Address > >,
         res: fold_many0!(
             do_parse!( char!(',') >> addr: mailbox >> (addr) ),
             vec![ first ],
-            | mut list: AddressList, item | {
+            | mut list: Vec<_>, item | {
                 list.push( item );
                 list
             }
@@ -183,7 +181,7 @@ my_named!( atom,
 
 my_named!( word< Word >,
     map!(
-        alt!( atom | quoted_string )
+        alt!( atom | quoted_string ),
         |slice| {
             Word( slice.as_base_range() )
         }
@@ -192,7 +190,7 @@ my_named!( word< Word >,
 
 my_named!( phrase< Phrase >, //ops-phrase
     map!(
-        many1( word ),
+        many1!( word ),
         |vec| Phrase( vec )
     )
 );
@@ -200,7 +198,7 @@ my_named!( phrase< Phrase >, //ops-phrase
 my_named!( unstructured< Unstructured >, //ops-unstructured
     map!(
         recognize!(
-            take_while!( |x| is_ws(x) || is_vchar(x) )
+            take_while!( call!( |x| is_ws(x) || is_vchar(x) ) )
         ),
         |text| Unstructured( text.as_base_range() )
     )
