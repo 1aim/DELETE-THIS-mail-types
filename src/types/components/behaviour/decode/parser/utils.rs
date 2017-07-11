@@ -69,23 +69,3 @@ macro_rules! postceded(
     };
 );
 
-pub fn is_ws(ch: char) -> bool {
-    unimplemented!();
-}
-
-pub fn is_ctext(ch: char) -> bool {
-    unimplemented!();
-}
-
-pub fn is_vchar(ch: char) -> bool {
-    unimplemented!();
-}
-
-pub fn is_atext(ch: char) -> bool {
-    unimplemented!();
-}
-
-pub fn is_qtext(ch: char) -> bool {
-    unimplemented!();
-}
-
