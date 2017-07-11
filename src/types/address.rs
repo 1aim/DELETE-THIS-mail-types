@@ -159,11 +159,11 @@ mod test {
         ($tname:ident, $input:expr, $result:expr) => {
             test_encode!{ $tname, false, $input, $result }
         };
-        ($tname:ident, $utf8:expr, $input:expr, $result:expr) => {
+        ($tname:ident, $bits8:expr, $input:expr, $result:expr) => {
             #[test]
             fn $tname() {
                 let address: Address = $input;
-                let mut encoder = MailEncoder::new( $utf8 );
+                let mut encoder = MailEncoder::new( $bits8 );
                 address.encode( &mut encoder ).unwrap();
 
                 assert_eq!(

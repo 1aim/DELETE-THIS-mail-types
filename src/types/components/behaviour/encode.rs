@@ -28,7 +28,7 @@ impl EncodeComponent for LocalPart {
     fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
         let data = self.apply_on( matching_data );
         encoder.note_optional_fws();
-        encoder.try_write_utf8_str( data )
+        encoder.try_write_bits8_str( data )
             .chain_err( || ErrorKind::NonEncodableComponents( "address/addr-spec/local-part", data.into() ) )?;
         encoder.note_optional_fws();
         Ok( () )
@@ -62,7 +62,7 @@ impl EncodeComponent for Word {
         if data.starts_with( "\"" ) {
             //FIXME we could "unquote" the string, split it in multiple words if nessesary and then encode it
             //we can not encode quoted strings as quoting already counts as encoding
-            encoder.try_write_utf8_str( data )?
+            encoder.try_write_bits8_str( data )?
         } else {
             //FIXME actually there might be some ascii chars we need to escape
             if let Ok( ascii ) = data.as_ascii_str() {
@@ -122,7 +122,7 @@ impl EncodeComponent for Unstructured {
 
 #[cfg(test)]
 mod test {
-    use codec::Utf8State;
+    use codec::Bits8State;
     use types::shared::Item;
     use super::*;
 
@@ -131,26 +131,26 @@ mod test {
         use super::*;
 
         macro_rules! test {
-            ($name:ident, $utf8: expr, $data:expr, $state:expr) => {
+            ($name:ident, $bits8: expr, $data:expr, $state:expr) => {
                 #[test]
                 fn $name() {
                     let _data = $data;
                     let data = Item::from( _data.clone() );
                     let local_part = LocalPart( 0..data.len() );
-                    let mut encoder = MailEncoder::new( $utf8 );
+                    let mut encoder = MailEncoder::new( $bits8 );
 
                     local_part.encode( &data, &mut encoder ).expect( "encoding not to fail" );
 
                     assert_eq!( _data, encoder.to_string() );
-                    assert_eq!( $state, encoder.utf8_support() )
+                    assert_eq!( $state, encoder.bits8_support() )
 
                 }
             }
         }
 
-        test!{ ascii, false, "ascii_local", Utf8State::Unsupported }
-        test!{ ascii_more_supported, true, "ascii_local", Utf8State::Supported }
-        test!{ utf8_ok, true, "utäf8", Utf8State::Used }
+        test!{ ascii, false, "ascii_local", Bits8State::Unsupported }
+        test!{ ascii_more_supported, true, "ascii_local", Bits8State::Supported }
+        test!{ utf8_ok, true, "utäf8", Bits8State::Used }
 
         #[test]
         fn utf8_fail() {
@@ -170,17 +170,17 @@ mod test {
         use super::*;
 
         macro_rules! test {
-            ($name:ident, $utf8: expr, $input:expr, $output:expr) => {
+            ($name:ident, $bits8: expr, $input:expr, $output:expr) => {
                  #[test]
                 fn $name() {
                     let data = Item::from( $input );
                     let domain = Domain( 0..data.len() );
-                    let mut encoder = MailEncoder::new( $utf8 );
-                    let utf8state = encoder.utf8_support();
+                    let mut encoder = MailEncoder::new( $bits8 );
+                    let bits8state = encoder.bits8_support();
 
                     domain.encode( &data, &mut encoder ).expect( "encoding failed" );
 
-                    assert_eq!( utf8state, encoder.utf8_support() );
+                    assert_eq!( bits8state, encoder.bits8_support() );
                     assert_eq!( $output, encoder.to_string() )
                 }
             }
@@ -225,7 +225,7 @@ mod test {
             display_name.encode( &data, &mut encoder ).expect( "encoding failed" );
 
             assert_eq!( "Hy =?utf8?Q?=C3=A4?= moin", encoder.to_string() );
-            assert_eq!( Utf8State::Supported, encoder.utf8_support() );
+            assert_eq!(Bits8State::Supported, encoder.bits8_support() );
         }
     }
 

@@ -11,15 +11,15 @@ pub mod utf8_to_ascii;
 use self::utf8_to_ascii::q_encode;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum Utf8State {
+pub enum Bits8State {
     Unsupported,
     Supported,
     Used
 }
 
-impl Utf8State {
+impl Bits8State {
     pub fn is_supported( &self ) -> bool {
-        use self::Utf8State::*;
+        use self::Bits8State::*;
         match *self {
             Supported | Used => true,
             Unsupported => false
@@ -27,7 +27,7 @@ impl Utf8State {
     }
     pub fn is_used( &self ) -> bool {
         match *self {
-            Utf8State::Used => true,
+            Bits8State::Used => true,
             _ => false
         }
     }
@@ -39,18 +39,18 @@ pub struct MailEncoder {
     current_line_length: usize,
     last_cfws_pos: Option<usize>,
     //FIXME change to _8bit_support as this is the thinks which matters
-    utf8_support: Utf8State
+    bits8_support: Bits8State
 }
 
 impl MailEncoder {
-    pub fn new(utf8_supported: bool) -> MailEncoder {
-        let utf8_supported = if utf8_supported {
-            Utf8State::Supported
+    pub fn new(bits8_supported: bool) -> MailEncoder {
+        let bits8_supported = if bits8_supported {
+            Bits8State::Supported
         } else {
-            Utf8State::Unsupported
+            Bits8State::Unsupported
         };
         MailEncoder {
-            utf8_support: utf8_supported,
+            bits8_support: bits8_supported,
             inner: String::new(),
             current_line_length: 0,
             last_cfws_pos: None
@@ -93,13 +93,13 @@ impl MailEncoder {
         self.write_char_unchecked( char.as_char() );
     }
 
-    pub fn try_write_utf8_str( &mut self, str: &str ) -> Result<()> {
-        use self::Utf8State::*;
-        match self.utf8_support {
+    pub fn try_write_bits8_str( &mut self, str: &str ) -> Result<()> {
+        use self::Bits8State::*;
+        match self.bits8_support {
             Unsupported if !str.is_ascii() =>
                 return Err( ErrorKind::TriedWritingUtf8IntoAsciiData.into() ),
             Supported if !str.is_ascii() =>
-                self.utf8_support = Used,
+                self.bits8_support = Used,
             _ => {}
         }
         self.write_str_unchecked( str );
@@ -150,8 +150,8 @@ impl MailEncoder {
                 self.inner.insert_str( cfws_pos, "\r\n " );
             }
 
-            // could be utf8 under some circumstances
-            if self.utf8_support.is_used() {
+            // could be bits8 under some circumstances
+            if self.bits8_support.is_used() {
                 self.current_line_length = self.inner[cfws_pos+2..].chars().count();
             } else {
                 self.current_line_length = self.inner.len() - (cfws_pos+2)
@@ -163,12 +163,12 @@ impl MailEncoder {
         self.current_line_length
     }
 
-    pub fn utf8_support(&self ) -> Utf8State {
-        self.utf8_support
+    pub fn bits8_support(&self ) -> Bits8State {
+        self.bits8_support
     }
 
     pub fn into_ascii_string( self ) -> StdResult<AsciiString, Self> {
-        if self.utf8_support.is_used() {
+        if self.bits8_support.is_used() {
             Err( self )
         } else {
             Ok( unsafe { AsciiString::from_ascii_unchecked( self.inner ) } )
@@ -218,10 +218,10 @@ mod test {
         ($name:ident, $inp:expr, $out:expr) => {
              io_encoded_word! { $name, false, $inp, $out }
         };
-        ($name:ident, $utf8:expr, $inp:expr, $out:expr) => {
+        ($name:ident, $bits8:expr, $inp:expr, $out:expr) => {
             #[test]
             fn $name() {
-                let mut encoder = MailEncoder::new( $utf8 );
+                let mut encoder = MailEncoder::new( $bits8 );
                 encoder.write_encoded_word( $inp );
                 assert_eq!(
                     $out,

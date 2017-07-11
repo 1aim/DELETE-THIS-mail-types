@@ -11,7 +11,7 @@ mailer contains information like `from`
 where recipients_data is a iterable mapping from address to recipient specific data,
 e.g. `Vec<(Address, Data)>`
 
-and mail_gen is something like `trait MailGen { fn gen_mail( from, to, data, utf8support ) ->  MailBody; }`
+and mail_gen is something like `trait MailGen { fn gen_mail( from, to, data, bits8support ) ->  MailBody; }`
  
 `MailBody` is not `tokio_smtp::MailBody` but has to implement nessesray contraints,
 (e.g. implemnting `toki_smtp::IntoMailBody` not that for the beginning this will be
