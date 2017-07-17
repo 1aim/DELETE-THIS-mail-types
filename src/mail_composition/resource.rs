@@ -9,13 +9,15 @@ pub enum Stream {
 
 impl Stream {
 
-    fn is_ascii( &self ) -> bool {
+    pub fn is_ascii( &self ) -> bool {
         use self::Stream::*;
         match *self {
             Ascii( .. ) => true,
             NonAscii( .. ) => false
         }
     }
+
+    
 
 }
 
