@@ -3,7 +3,7 @@ use std::ops::Deref;
 
 use mime::{ Mime, MULTIPART, BOUNDARY };
 use ascii::AsciiString;
-use futures::stream::Stream;
+use futures::stream::BoxStream;
 
 use headers::Header;
 use error::*;
@@ -42,7 +42,7 @@ pub struct SinglepartMail {
     // have to implement support for it in this lib for non smtp mail transfer
     // also CHUNKED does not use dot-staching making it impossible to use it
     // with tokio-smtp
-    source: Box< Stream<Item=u8, Error=Error> >
+    source: BoxStream<Item=u8, Error=Error>
 }
 
 
