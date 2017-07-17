@@ -3,6 +3,9 @@ extern crate mime;
 extern crate owning_ref;
 extern crate quoted_printable;
 extern crate chrono;
+extern crate futures;
+extern crate serde;
+
 #[macro_use]
 extern crate nom;
 
