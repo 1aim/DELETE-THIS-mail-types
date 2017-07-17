@@ -1,3 +1,10 @@
+use self::MailType::*;
+
+pub enum MailType {
+    Ascii,
+    Internationalized
+    //TODO add include/exclude obsolete
+}
 
 ///WS as defined by RFC 5234
 #[inline(always)]
@@ -9,9 +16,14 @@ pub fn is_ws(ch: char) -> bool {
 }
 
 //VCHAR as defined by RFC 5243
-pub fn is_vchar(ch: char) -> bool {
-    unimplemented!();
-    //%x21-7E            ; visible (printing) characters
+pub fn is_vchar( ch: char, tp: MailType ) -> bool {
+    match ch {
+        '!'...'~' => true,
+        _ => match tp {
+            Ascii => false,
+            Internationalized => ch.len_utf8() > 1
+        }
+    }
 }
 
 ///any whitespace (char::is_whitespace
@@ -21,36 +33,54 @@ pub fn is_any_whitespace(ch: char) -> bool {
 }
 
 //ctext as defined by RFC 5322
-pub fn is_ctext(ch: char) -> bool {
-    //%d33-39 /          ; Printable US-ASCII
-    //%d42-91 /          ;  characters not including
-    //%d93-126 /         ;  "(", ")", or "\"
-    // obs-ctext
-    unimplemented!();
+pub fn is_ctext( ch: char, tp: MailType  ) -> bool {
+    match ch {
+        '!'...'\'' |
+        '*'...'[' |
+        ']'...'~' => true,
+        // obs-ctext
+        _ => match tp {
+            Ascii => false,
+            Internationalized => ch.len_utf8() > 1
+        }
+    }
 }
 
 
-//atext as defined by RFC 5322
-pub fn is_atext(ch: char) -> bool {
-    unimplemented!();
-    // ALPHA / DIGIT /   ; Printable US-ASCII
-    //"!" / "#" /        ;  characters not including
-    //"$" / "%" /        ;  specials.  Used for atoms.
-    //"&" / "'" /
-    //"*" / "+" /
-    //"-" / "/" /
-    //"=" / "?" /
-    //"^" / "_" /
-    //"`" / "{" /
-    //"|" / "}" /
-    //"~"
+pub fn is_special( ch: char ) -> bool {
+    match ch {
+        '(' | ')' |
+        '<' | '>' |
+        '[' | ']' |
+        ':' | ';' |
+        '@' | '\\'|
+        ',' | '.' |
+        '"' => true,
+        _ => false
+    }
+}
+
+/// atext as defined by RFC 5322
+#[inline(always)]
+pub fn is_atext( ch: char, tp: MailType  ) -> bool {
+    ( ! is_special( ch ) ) || {
+        match tp {
+            Ascii => false,
+            Internationalized => ch.len_utf8() > 1
+        }
+    }
 }
 
 //qtext as defined by RFC 5322
-pub fn is_qtext(ch: char) -> bool {
-    unimplemented!();
-    //%d33 /             ; Printable US-ASCII
-    //%d35-91 /          ;  characters not including
-    //%d93-126 /         ;  "\" or the quote character
-    // obs-qtext
+pub fn is_qtext( ch: char, tp: MailType ) -> bool {
+    match ch {
+        '!' |
+        '#'...'[' |
+        ']'...'~' => true,
+        //obs-qtext
+        _ => match tp {
+            Ascii => false,
+            Internationalized => ch.len_utf8() > 1
+        }
+    }
 }
