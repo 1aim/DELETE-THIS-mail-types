@@ -33,6 +33,12 @@ impl Bits8State {
     }
 }
 
+//TODO add a Context + with_context (+ make MailEncoder a trait?)
+//for encoding headers, we:
+//1. have less characters for encoded words
+//2. need smtputf8 for writing any non ASCII data
+//3. but for bodies we only need the 8BITMIME extension
+
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MailEncoder {
     inner: Vec<u8>,
