@@ -13,6 +13,8 @@ pub struct Unstructured {
 
 impl MailEncodable for Unstructured {
     fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+        //FIXME can contain encoded-word
+        //FIXME replace usage of Text with Unstructured at all points
         self.component_slices.encode( &self.inner, encoder )
     }
 }
