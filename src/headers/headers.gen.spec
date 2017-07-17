@@ -30,8 +30,8 @@ RFC   | Name                      | Rust-Type         | Comment
 2045  | Content-Type              | Mime              |
       | Content-ID                | MessageID         |
       | Content-Transfer-Encoding | TransferEncoding  |
-      | Content-Description       | Text              | != unstructured should be ASCII
-      |                           |                   |    but could contain encoded word
+      | Content-Description       | Text              | is Text the same as unstructured ? older
+      |                           |                   | RFC has text instead of unstructured?
 ------|---------------------------|-------------------|---------------------------
 
 
