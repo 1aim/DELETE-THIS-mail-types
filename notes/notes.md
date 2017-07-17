@@ -147,6 +147,33 @@ extended by rfc2231
 
 additional limits in header fields
 
+header containing encoded words are limited to 76 bytes
+
+a "big" text chunk can be split in multiple encoded words seperated by b'\r\n '
+
+non encoded words and encoded words can apear in the same header field, but
+must be seperate by "linear-white-space" (space) which is NOT removed when
+decoding encoded words 
+
+encoded words can appear in:
+
+- `text` sections where `text` is based on RFC 822! (e.g. Content-Description )
+    - in context of RFC 5322 this means `unstructured` count's as text
+- `comments` (as alternative to `ctext`,`quoted-pair`,`comment`
+- `word`'s within a `phrase`
+
+**Therefor it MUST NOT appear in any structured header field except withing a `comment` or `phrase`!**
+
+**You have to encode text which looks like an encoded word**
+
+
+
+limitations:
+
+- in comment's no ')',')' and '"'
+- in headers no ' '
+
+
 # Other
 
 there is no `[CFWS]` after the `:` in Header fields,
