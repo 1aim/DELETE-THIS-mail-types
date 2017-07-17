@@ -26,11 +26,11 @@ impl DecodeComponent for Domain {
 
     //FIXME support domain-literal / obs-domain
     fn parse( _data: &[u8] ) -> Result<Self> {
-        Err(ErrorKind::Msg("yo".into()).into())
+        unimplemented!();
     }
 }
 
-
+#[cfg(excluded)]
 mod parser;
 
 
