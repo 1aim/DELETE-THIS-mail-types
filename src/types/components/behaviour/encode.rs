@@ -18,7 +18,7 @@ impl EncodeComponent for Domain {
     fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
         let data = self.apply_on( matching_data );
         encoder.note_optional_fws();
-        puny_code_domain(data, encoder );
+        puny_code_domain( data, encoder );
         encoder.note_optional_fws();
         Ok( () )
     }
