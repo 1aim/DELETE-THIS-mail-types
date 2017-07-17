@@ -1,4 +1,4 @@
-
+use mime::Mime;
 
 error_chain! {
 
@@ -27,6 +27,24 @@ error_chain! {
         InvalidHeaderName(name: String) {
             description( "given header name is not valid" )
             display( "{:?} is not a valid header name", name )
+        }
+
+        NotMultipartMime( mime: Mime ) {
+            description( "expected a multipart mime for a multi part body" )
+            display( _self ) -> ( "{}, got: {}", _self.description(), mime )
+        }
+
+        MultipartBoundaryMissing {
+            description( "multipart boundary is missing" )
+        }
+
+        NotSinglepartMime( mime: Mime ) {
+            description( "expected a non-multipart mime for a non-multipart body" )
+            display( _self ) -> ( "{}, got: {}", _self.description(), mime )
+        }
+
+        NeedPlainAndOrHtmlMailBody {
+
         }
     }
 }
