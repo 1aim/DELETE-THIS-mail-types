@@ -1,6 +1,8 @@
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct ContentId;
+//TODO replace with types::ContentId
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
+pub struct ContentId( String );
+
 #[derive(Debug)]
 pub struct Context {
     support: Support
@@ -31,7 +33,8 @@ type Mailbox = TODO:
 
 pub struct MailSendContext {
     pub from: Mailbox,
-    pub to: To
+    pub to: To,
+    pub subject: String
 }
 
 

@@ -6,7 +6,7 @@ use error::*;
 pub use super::data::{
     Attachment as AttachmentIn,
     Embedding as EmbeddingIn,
-    SearchData
+    DataInterface
 };
 pub use super::resource::{
     Embedding as EmbeddingOut,

@@ -1,19 +1,26 @@
 use std::collections::BTreeMap;
 use std::mem::replace;
 
+use serde;
+
 use super::resource;
 use super::resource::Resource;
 use super::context::{ Context, ContentId };
 
-pub trait SearchData {
+type Mailbox = TODO;
+
+pub trait DataInterface {
 
     fn find_externals<F1,F2>( &mut self, emb: F1, att: F2 )
         where F1: FnMut( &mut Embedding ),
               F2: FnMut( &mut Attachment);
+
+    fn see_from_mailbox(&mut self, mbox: &Mailbox );
+    fn see_to_mailbox(&mut self, mbox: &Mailbox );
 }
 
 //FIXME PathBuf => FileSource
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Embedding(InnerEmbedding);
 #[derive(Debug)]
 enum InnerEmbedding {
@@ -36,8 +43,22 @@ impl Embedding {
     }
 }
 
+impl serde::Serialize for InnerEmbedding {
+    fn serialize<S>( &self, serializer: S ) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        use self::InnerEmbedding::*;
+        match self {
+            AsValue( .. ) => Err( S::Error::custom( concat!(
+                "embeddings can be serialized as content id, not as value, "
+                "preprocess_data should have ben called before" ) ) ),
+            AsContentId( cid ) => cid.serialize( serializer )
+        }
+    }
+}
+
 //FIXME PathBuf => FileSource
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Attachment(InnerAttachment );
 #[derive(Debug)]
 enum InnerAttachment {
@@ -62,9 +83,22 @@ impl Attachment {
     }
 }
 
+impl serde::Serialize for InnerAttachment {
+    fn serialize<S>( &self, serializer: S ) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        use self::InnerAttachment::*;
+        match self {
+            AsValue( .. ) => Err( S::Error::custom( concat!(
+                "only moved attachments can be serialized, "
+                "preprocess_data should have ben called before" ) ) ),
+            Moved => serializer.serialize_none()
+        }
+    }
+}
 
-pub fn preprocess_data<D: SearchData>( ctx: &Context, data: &mut D )
-                                       -> (Vec<resource::Embedding>, Vec<resource::Attachment>)
+pub fn preprocess_data<D: DataInterface>( ctx: &Context, data: &mut D )
+    -> (Vec<resource::Embedding>, Vec<resource::Attachment>)
 {
     let mut embeddings = Vec::new();
     let mut attachments = Vec::new();
