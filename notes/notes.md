@@ -100,7 +100,7 @@ Contend types:
     - e.g. `(multipart/alternative (text/plain ...) (text/html ...))`
     - _place preferred form last!_ (i.e. increasing order of preference)
     - interesting usage with `application/X-FixedRecord`+`application/octet-stream`
-- `related` all bodies are part of one howl, making no (less) sense if placed alone
+- `related` (RFC 2387) all bodies are part of one howl, making no (less) sense if placed alone
     - the first part is normally the entry point, but this can be chaged through parameters
         - (only relevant for parsing AND interpreting it, but not for generating as we can always use the default)
     - Content-ID is used to specify a id on each body respectivly which can be used to refer to it (e.g. in HTML)
@@ -110,7 +110,7 @@ Contend types:
 - `signed` (body part + signature part)
 - `encrypted` (encryption information part + encrypted data (`application/octet-stream`))
 - `form-data`
-- `x-mixed-replace` (for server push, don't use by now there are bether ways)
+- `x-mixed-replace` (for server push, don't use by now there are better ways)
 - `byteranges`
     
 
@@ -128,6 +128,26 @@ Example mail structure:
     (image/png (Content-Disposition attachment) ...))
 ```
 
+Possible alternate structure:
+
+```
+(multipart/mixed 
+    (multipart/related
+        
+        (multipart/alternative
+            (text/plain ...  '[cid:contentid@1aim.com]' ... )  
+            (text/html ... '<img src="cid:contentid@1aim.com"></img>' ... ) )
+             
+        (image/png (Content-ID <contentid@1aim.com>) ... ) )
+        
+    (image/png (Content-Disposition attachment) ...)
+    (image/png (Content-Disposition attachment) ...))
+```
+
+but I have not seen the `[cid:...]` for text/plain in any standard, through it might be there.
+Also if se we might still have a related specific for the html (for html only stuff) so:
+- place Embedding in Data in the outer `multipart/related`
+- place Embedding returned by the template in inner `multipart/related`
 
 # Attatchment
 
@@ -232,3 +252,9 @@ field to some structs.
 # TODO
 check if some parts are empty and error if encode is calde on them
 e.g. empty domain
+
+
+# Postponded
+
+other features like signature, encryption etc.
+
