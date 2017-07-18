@@ -6,6 +6,9 @@ extern crate chrono;
 extern crate futures;
 extern crate serde;
 #[macro_use]
+extern crate lazy_static;
+
+#[macro_use]
 extern crate serde_derive;
 
 #[macro_use]
@@ -24,3 +27,5 @@ pub mod mail_composition;
 pub mod codec;
 pub mod headers;
 pub mod types;
+
+mod utils;
