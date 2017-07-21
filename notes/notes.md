@@ -258,3 +258,19 @@ e.g. empty domain
 
 other features like signature, encryption etc.
 
+# Dependencies
+
+quoted_printable and base64 have some problems:
+1. it's speaking of a 76 character limit where it is 78
+   it seems they treated the RFC as 78 character including
+   CRLF where the RFC speaks of 78 characters EXCLUDING
+   CRLF 
+2. it's only suited for content transfer encoding the body
+   as there is a limit of the length of encoded words (75) 
+   which can't be handled by both
+   
+also quoted_printable has another problem:
+3. in headers the number of character which can be displayed without
+   encoding is more limited (e.g. no ' ' ) quoted_printable does not
+   respect this? (TODO CHECK THIS)
+ 
