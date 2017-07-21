@@ -6,6 +6,7 @@ use ascii::{ AsciiString, AsciiStr, AsciiChar };
 
 use error::*;
 
+pub mod transfer_encoding;
 pub mod utf8_to_ascii;
 
 use self::utf8_to_ascii::q_encode;

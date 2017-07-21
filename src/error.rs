@@ -46,5 +46,30 @@ error_chain! {
         NeedPlainAndOrHtmlMailBody {
 
         }
+
+        ContentTypeAndBodyIncompatible {
+            description( concat!(
+                "given content type is incompatible with body,",
+                "e.g. using a non multipart mime with a multipart body" ) )
+        }
+
+        UnknownTransferEncoding( encoding: String ) {
+            description( "the given transfer encoding is not supported" )
+            display( "the transfer encoding {:?} is not supported", encoding )
+        }
+
+        Invalide7BitValue( byte: u8 ) {
+            description( "the byte is not valid in 7bit (content transfer) encoding" )
+        }
+        Invalide8BitValue( val: u8 ) {
+            description( "the byte is not valid in 8bit (content transfer) encoding" )
+        }
+
+        Invalide7BitSeq( byte: u8 ) {
+            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\" in 7bit (content transfer) encoding " )
+        }
+        Invalide8BitSeq( val: u8 ) {
+            description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\" in 8bit (content transfer) encoding " )
+        }
     }
 }
