@@ -7,7 +7,7 @@ use codec::transfer_encoding::TransferEncodedBuffer;
 use utils::{ Buffer, MimeBitDomain };
 use types::TransferEncoding;
 
-pub type BodyFuture = BoxFuture<Item=TransferEncodedBuffer, Error=Error>;
+pub type FutureBuf = BoxFuture<Item=TransferEncodedBuffer, Error=Error>;
 
 #[derive(Debug)]
 pub struct Body {
@@ -16,9 +16,9 @@ pub struct Body {
 
 enum InnerBody {
     /// a futures resolving to a buffer
-    Future(BodyFuture),
+    Future(FutureBuf),
     /// store the value the BufferFuture resolved to
-    Value(Buffer),
+    Value(TransferEncodedBuffer),
     /// if the BufferFuture failed, we don't have anything
     /// to store, but have not jet dropped the mail it is
     /// contained within, so we still need a value for InnerBody
@@ -33,10 +33,17 @@ enum InnerBody {
 
 impl Body {
 
-    /// creates a new body based on a already transfer encoded buffer
-    pub fn new( data:BodyFuture ) -> Body {
+    /// creates a new body based on a already transfer-encoded buffer
+    pub fn new_future(data: FutureBuf) -> Body {
         Body {
             body: InnerBody::Future( body_future )
+        }
+    }
+
+    /// creates a new body based on a already transfer-encoded buffer
+    pub fn new_resolved( data: TransferEncodedBuffer ) -> Body {
+        Body {
+            body: InnerBody::Value( data )
         }
     }
 
@@ -100,3 +107,15 @@ impl Body {
     }
 }
 
+
+impl From<FutureBuf> for Body {
+    fn from(fut: FutureBuf) -> Self {
+        Self::new_future( fut )
+    }
+}
+
+impl From<TransferEncodedBuffer> for Body {
+    fn from(data: TransferEncodedBuffer) -> Self {
+        Self::new_resolved( data )
+    }
+}

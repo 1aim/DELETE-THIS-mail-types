@@ -22,7 +22,7 @@ extern crate error_chain;
 mod macros;
 
 pub mod error;
-pub mod raw_mail;
+pub mod mail;
 pub mod mail_composition;
 
 pub mod codec;

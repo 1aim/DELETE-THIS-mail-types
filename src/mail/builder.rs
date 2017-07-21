@@ -1,28 +1,51 @@
 use std::ops::Deref;
+use std::sync::Arc;
 use std::borrow::Cow;
+use std::path::Path;
 
 use mime::Mime;
+use futures::{ Future };
+use futures::future::{ self,  BoxFuture };
 
 use error::*;
 use types::TransferEncoding;
 use headers::Header;
-use super::body::Stream;
+use codec::transfer_encoding::TransferEncodedBuffer;
+use utils::Buffer;
+
+use super::resource::Resource;
 use super::{ MailPart, Mail, Headers, Body };
 use super::utils::is_multipart_mime;
 
-const DEFAULT_TRANSFER_ENCODING: &TransferEncoding = &TransferEncoding::Base64;
+
+pub trait Elsewhere {
+    //FIXME add mime sniffing and file metadata
+    type FileFuture: Future<Item=Vec<u8>, Error=Error>;
+
+    // you can use future::lazy( || stdioloadfile( path ) )
+    // as this will always be chained with some post processing (content transfer encoding)
+    // and then passed to execute_elsewhere
+    fn load_file( &self,  path: &Path ) -> Self::FileFuture;
+    fn execute_elsewhere<F: Future>( &self, fut: F) -> BoxFuture<Item=F::Item, Error=F::Error>;
+}
+
 
 
 //SubBuilder
-pub struct SubBuilder;
-pub struct Builder;
+pub struct SubBuilder<E: Elsewhere>(pub Arc<E>);
+pub struct Builder<E: Elsewhere>(pub Arc<E>);
 
-struct BuilderShared {
+struct BuilderShared<E: Elsewhere> {
+    e: Arc<E>,
     headers: Headers,
     is_sub_body: bool
 }
 
-impl BuilderShared {
+impl<E: Elsewhere> BuilderShared<E> {
+
+    fn sub( &self ) -> SubBuilder<E> {
+        SubBuilder( self.e.clone() )
+    }
 
     fn set_header( &mut self, header: Header, is_multipart: bool ) -> Result<Option<Header>> {
         //move checks for single/multipart from mail_composition here
@@ -54,87 +77,102 @@ impl BuilderShared {
     }
 }
 
-pub struct SinglepartBuilderNoBody( BuilderShared );
-pub struct SinglepartBuilderWithBody( BuilderShared, Stream );
-pub struct MultipartBuilderNoBody{
-    inner: BuilderShared,
-    hidden_text: Option<String> );
+pub struct SinglepartBuilderNoBody<E: Elsewhere> {
+    inner: BuilderShared<E>,
 }
-pub struct MultipartBuilderWithBody {
-    inner: BuilderShared,
+pub struct SinglepartBuilderWithBody<E: Elsewhere> {
+    inner: BuilderShared<E>,
+    body: Resource
+}
+pub struct MultipartBuilderNoBody<E: Elsewhere> {
+    inner: BuilderShared<E>,
+    hidden_text: Option<String>
+}
+pub struct MultipartBuilderWithBody<E: Elsewhere> {
+    inner: BuilderShared<E>,
     hidden_text: Option<String>,
     //FIXME Vec1Plus
     bodies: Vec<Mail>,
 }
 
 
-impl Builder {
+impl<E: Elsewhere> Builder<E> {
     #[inline]
-    fn new<T: MimeLink>(mime: T) -> T::Builder {
-        T::Builder::_new(mime.into(), false)
+    fn new<T: MimeLink>( &self, mime: T) -> T::Builder {
+        T::Builder::_new( self.e.clone(), mime.into(), false)
     }
 }
 
 impl SubBuilder {
     #[inline]
-    fn new<T: MimeLink>( mime: T ) -> T::Builder {
-        T::Builder::_new( mime.into(), true )
+    fn new<T: MimeLink>( &self, mime: T ) -> T::Builder {
+        T::Builder::_new( self.e.clone(), mime.into(), true )
     }
 }
 
-impl SinglepartBuilderNoBody {
+impl<E: Elsewhere> SinglepartBuilderNoBody<E> {
 
     //TODO possible move resource::Stream here as well as to_ascii_stream
     // it can be nicely integrate in this method
-    fn set_body( self, body: Stream ) -> SinglepartBuilderWithBody {
-        SinglepartBuilderWithBody( self.0, body )
+    fn set_body( self, body: Resource ) -> SinglepartBuilderWithBody {
+        SinglepartBuilderWithBody {
+            inner: self.inner,
+            body: body
+        }
     }
 
     fn set_header( &mut self, header: Header ) -> Result<Self> {
-        self.0.set_header(header, false )?;
+        self.inner.set_header(header, false )?;
         Ok( self )
     }
 
 }
 
-impl SinglepartBuilderWithBody {
+impl<E: Elsewhere> SinglepartBuilderWithBody<E> {
 
     fn set_header( &mut self, header: Header ) -> Result<Self> {
-        self.0.set_header(header, false )?;
+        self.inner.set_header(header, false )?;
         Ok( self )
     }
 
     fn build( self ) -> Result<Mail> {
-        let transfer_encoding = self.0.headers.get( Cow::Borrowed(
-            ascii_str!{ C o n t e n t Minus T r a n s f e r Minus E n c o d i n g }
-        ) );
+        use self::Resource::*;
 
-        let body = match self.1 {
-            Stream::Ascii( ascii_stream ) => {
-                if let Some( encoding ) = transfer_encoding {
-                    Body::new( ascii_stream.map( |ascii_char| ascii_char as u8 ), encoding )?
-                } else {
-                    Body::new_just_ascii( ascii_stream )
-                }
+        let body: Body = match self.body {
+            Buffer( buffer ) => {
+                self.inner.e.execute_elsewhere( future::lazy(
+                   move || TransferEncodedBuffer::encode_buffer( buffer, None )
+                ) ).into()
             },
-            Stream::NonAscii( stream ) => {
-                let encoding = transfer_encoding.unwrap_or( DEFAULT_TRANSFER_ENCODING );
-                Body::new( stream, encoding )?
+            Future( future ) => {
+                future.and_then( |buffer|
+                    self.inner.e.execute_elsewhere(
+                        TransferEncodedBuffer::encode_buffer( buffer, None )
+                    )
+                ).into()
+            },
+            File { mime, path, alternate_name } => {
+                self.inner.e.execute_elsewhere(
+                    self.inner.e.load_file( path ).map( |data| {
+                        //TODO add file meta, replacing name with alternate_name (if it is some)
+                        let buffer = Buffer::new( mime, data );
+                        TransferEncodedBuffer::encode_buffer( buffer, None )
+                    })
+                ).into()
             }
         };
-
 
         self.0.build( MailPart::SingleBody { body } )
     }
 
 }
 
-impl MultipartBuilderNoBody {
+impl<E: Elsewhere> MultipartBuilderNoBody<E> {
 
     /// # Example
     /// ```ignore
     ///
-    /// Builder::new( MultipartMime::new( mime )? )
+    /// Builder(Setup).new( MultipartMime::new( mime )? )
     ///     .add_body( |builder| builder
     ///         .new( Singlepart::new( mime )? )
     ///         .set_body( body1 )
@@ -145,12 +183,12 @@ impl MultipartBuilderNoBody {
     ///     )?
     /// ```
     fn add_body<FN>( self, body_fn: FN ) -> Result<Self>
-            where FN: FnOnce(SubBuilder) -> Result<Mail>
+            where FN: FnOnce(SubBuilder<E>) -> Result<Mail>
     {
         Ok( MultipartBuilderWithBody {
             inner: self.inner,
             hidden_text: self.hidden_text,
-            bodies: vec![ body_fn( SubBuilder )? ],
+            bodies: vec![ body_fn( self.inner.sub() )? ],
         } )
     }
 
@@ -160,12 +198,12 @@ impl MultipartBuilderNoBody {
     }
 }
 
-impl MultipartBuilderWithBody {
+impl<E: Elsewhere> MultipartBuilderWithBody<E> {
 
     fn add_body<FN>( self, body_fn: FN ) -> Result<Self>
-        where FN: FnOnce(SubBuilder) -> Result<Mail>
+        where FN: FnOnce(SubBuilder<E>) -> Result<Mail>
     {
-        self.bodies.push( body_fn( SubBuilder )? )
+        self.bodies.push( body_fn( self.inner.sub() )? )
         Ok( self )
     }
 

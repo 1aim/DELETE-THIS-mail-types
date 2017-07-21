@@ -20,6 +20,7 @@ pub use self::builder::*;
 
 mod utils;
 pub mod body;
+pub mod resource;
 mod builder;
 mod encode;
 
