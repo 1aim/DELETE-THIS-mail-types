@@ -5,6 +5,7 @@ extern crate quoted_printable;
 extern crate chrono;
 extern crate futures;
 extern crate serde;
+extern crate base64;
 #[macro_use]
 extern crate lazy_static;
 
