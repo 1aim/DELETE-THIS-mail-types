@@ -1,10 +1,14 @@
-use mime::Mime;
-use futures::Either;
 
+
+use mime::Mime;
+use futures::future::BoxFuture;
+
+use codec::transfer_encoding::TransferEncodedBuffer;
 use utils::{ Buffer, MimeBitDomain };
 use types::TransferEncoding;
 
-//FIXME possible merge with ressource
+pub type BodyFuture = BoxFuture<Item=TransferEncodedBuffer, Error=Error>;
+
 #[derive(Debug)]
 pub struct Body {
     body: InnerBody
@@ -12,7 +16,7 @@ pub struct Body {
 
 enum InnerBody {
     /// a futures resolving to a buffer
-    Future(BufferFuture),
+    Future(BodyFuture),
     /// store the value the BufferFuture resolved to
     Value(Buffer),
     /// if the BufferFuture failed, we don't have anything
@@ -29,45 +33,8 @@ enum InnerBody {
 
 impl Body {
 
-    /// creates a new body based on the `data` Buffer,
-    ///
-    /// if data is not yet transfer encoded:
-    /// - it will be encoded with transfer_encoding if it is some
-    /// - or if it 7bit it won't be encode (but checked)
-    /// - or it will be encoded with QuotedPrintable if it is text
-    /// - or it will be encoded with base64 if it isn't text
-    ///
-    /// if data is already transfer encoded and `transfer_encoding` is
-    /// `transfer_encoding` will be ignores, but a warning is triggered
-    pub fn new( data: BufferFuture, transfer_encoding: Option<TransferEncoding> ) -> Result<Body> {
-        let preset =
-            match transfer_encoding.map( |encoding| TRANSFER_ENCODINGS.lookup( encoding ) ) {
-                Some( result ) => Some( result? ),
-                None => None
-            };
-        
-        let body_future = data.and_then( move |buffer: Buffer| {
-             if buffer.content_transfer_encoding().is_some() {
-                 //TODO if preset.is_some() { warn!() }
-                 return future::ok( buffer ).boxed();
-             }
-             let func = preset.unwrap_or_else(|| {
-                 let encoding =
-                     if buffer.bit_domain == MimeBitDomaim::_7Bit {
-                         TranserEncoding::_7Bit
-                     } else if buffer.is_text() {
-                         TransferEncoding::QuotedPrintable
-                     } else {
-                         TransferEncoding::Base64
-                     };
-                TRANSFER_ENCODINGS.lookup( encoding )
-                    .expect( "_7Bit/quoted_printable/base64 are preset and therefore can not be not available" );
-            });
-
-            func( buffer )
-
-        }).boxed();
-
+    /// creates a new body based on a already transfer encoded buffer
+    pub fn new( data:BodyFuture ) -> Body {
         Body {
             body: InnerBody::Future( body_future )
         }

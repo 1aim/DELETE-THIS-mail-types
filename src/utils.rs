@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use mime::Name;
+use mime::{ Mime, Name, CHARSET, TEXT };
 use futures::BoxFuture;
 
 use types::TransferEncoding;
@@ -19,25 +19,8 @@ impl<T> PushIfSome<T> for Vec<T> {
 }
 
 
-type BufferFuture = BoxFuture<Item=Buffer, Error=Error>;
-
-
-pub enum MimeBitDomain {
-    /// 7bit Ascii (US-ASCII), no \0, no orphan `\n`, `\r`, line length limiations
-    _7Bit,
-    /// 8bit, no \0, no orphan `\n`, `\r`, line length limiations
-    ///
-    /// Note that for now _8Bit isn't really used at all, everything
-    /// with is not 7bit is currently labeled as Binary
-    _8Bit,
-    /// binary, not constraints
-    ///
-    /// (through doing dot-statching on smtp level, and
-    ///   boundary checks for mime multipart boundaries
-    ///   is still nessesary)
-    Binary
-}
-
+//TODO like name, cration_data, etc. all for themself optional
+type FileMeta = ();
 
 // WHEN_FEATURE(more_charsets)
 // for now this is just a vector,
@@ -45,41 +28,51 @@ pub enum MimeBitDomain {
 // non-utf8/non-ascii encodings this will
 // have more fields, like e.g. `encoding: EncodingSpec`
 pub struct Buffer {
-    inner: Vec<u8>,
     content_type: Mime,
-    //file_meat_info: FMI // like name, cration_data, etc.
-    transfer_encoding: Option<TransferEncoding>
+    data: Vec<u8>,
+    file_meta: FileMeta
 }
 
 
 impl Buffer {
 
-    fn bit_domain( &self ) -> MimeBitDomain {
-        let is_7bit = self.charset()
+    pub fn new( content_type: Mime, data: Vec<u8> ) -> Buffer {
+        Buffer::new_with_file_meta( content_type, data, Default::default() )
+    }
+
+    pub fn new_with_file_meta( content_type: Mime, data: Vec<u8>, file_meta: FileMeta ) -> Buffer {
+        Buffer { content_type, data, file_meta }
+    }
+
+    pub fn with_data<FN>( self, modif: FN ) -> Self
+        where FN: FnOnce( Vec<u8> ) -> Vec<u8>
+    {
+        self.data = modif( self.data );
+        self
+    }
+
+    pub fn content_type( &self ) -> &Mime {
+        &self.content_type
+    }
+
+    pub fn file_meta( &self ) -> &FileMeta {
+        &self.file_meta
+    }
+
+    pub fn file_meta_mut( &self ) -> &mut FileMeta {
+        &mut self.file_meta
+    }
+
+    pub fn has_ascii_charset( &self ) -> bool {
+        self.content_type()
+            .get_param( CHARSET )
             .map( |charset| charset == "us-ascii" )
-            .unwrap_or( false );
-
-        if is_7bit {
-            MimeBitDomain::_7Bit
-        } else {
-            MimeBitDomain::Binary
-        }
+            .unwrap_or( false )
     }
 
-    fn charset<'a>( &'a self ) -> Option<mime::Name<'a>> {
-        self.content_type.get_param( mime::CHARSET )
-    }
-
-    fn is_test( &self ) -> bool {
-        self.content_type.type_() == mime::TEXT
-    }
-
-    fn set_content_transfer_encoding( &mut self, encoding: TransferEncoding ) {
-        self.transfer_encoding = encoding;
-    }
-
-    fn content_transfer_encoding( &self ) -> Option<&TransferEncoding> {
-        self.transfer_encoding.as_ref()
+    pub fn contains_text( &self ) -> bool {
+        let type_ = self.content_type().type_();
+        type_ == TEXT
     }
 
 }
@@ -87,18 +80,13 @@ impl Buffer {
 impl Deref for Buffer {
     type Target = [u8];
     fn deref( &self ) -> &[u8] {
-        *self.inner
+        *self.data
     }
 }
 
 impl Into< Vec<u8> > for Buffer {
     fn into(self) -> Vec<u8> {
-        self.inner
+        self.data
     }
 }
 
-impl From< Vec<u8> > for Buffer {
-    fn from( data: Vec<u8> ) -> Self {
-        Buffer { inner: data }
-    }
-}
