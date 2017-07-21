@@ -1,97 +1,166 @@
 use std::result::{ Result as StdResult };
 use std::ops::Deref;
+//FIXME use FnvHashMap
+use std::collections::HashMap;
+use std::borrow::Cow;
 
 use mime::{ Mime, MULTIPART, BOUNDARY };
-use ascii::AsciiString;
-use futures::stream::BoxStream;
+use ascii::{ AsciiString, AsciiChar };
+use futures::future::{ BoxFuture, ok as future_ok };
+use futures::{ Future, Async, Poll, IntoFuture };
 
+use codec::transfer_encoding::TRANSFER_ENCODINGS;
+use types::TransferEncoding;
 use headers::Header;
 use error::*;
-// structure with mime multipart etc.
-// possible with futures
+use utils::{ BufferFuture, Buffer };
 
+use self::body::Body;
+pub use self::builder::*;
+
+mod utils;
+pub mod body;
+mod builder;
+mod encode;
+
+
+type Headers = HashMap<Cow<'static, AsciiStr>, Header>;
+
+
+pub struct Mail {
+    //NOTE: by using some OwnedOrStaticRef AsciiStr we can probably safe a lot of
+    // unnecessary allocations
+    headers: Headers,
+    body: MailPart,
+    // can be used for warnings, as any non X-, non Content- header in a body
+    // will be ignored and is pointless
+    is_sub_body: bool
+}
 
 
 pub enum MailPart {
-    Body( SinglepartMail ),
-    Multipart {
-        mime: MultipartMime,
-        bodies: Vec<MailPart>,
-        // there can be more headers then "just" Content-Type: multipart/xxx
-        // Through I don't know if it makes sense in any position except the outer most MimeBody
-        additional_headers: Vec<Header>,
-        // there is usable (plain text) space between the headers and the first sub body
-        // it can be used mainly for email clients not supporting  multipart mime
-        hidden_text: AsciiString,
+    SingleBody {
+        // a future stream of bytes?
+        // we apply content transfer encoding on it but no dot-staching as that
+        // is done by the protocol, through its part of the mail so it would be
+        // interesting to dispable dot staching on protocol level as we might
+        // have to implement support for it in this lib for non smtp mail transfer
+        // also CHUNKED does not use dot-staching making it impossible to use it
+        // with tokio-smtp
+        body: Body
+    },
+    MultipleBodies {
+        bodies: Vec<Mail>,
+        hidden_text: AsciiString
     }
 }
 
-// if true this is a multi part body
-// as such headers _SHOULD_ only contain `Content-` Headers (others are ignored)
-// if false its a stand alone email
-pub struct SinglepartMail {
-    mime: SinglepartMime,
-    // is not allowed to contain Content-Type, as this is given through the mime field
-    // if Content-Transfer-Encoding is present it's used as PREFFERED encoding, the
-    // default and fallback (e.g. 8bit but no support fo 8bit) is Base64
-    headers: Vec<Header>,
-    // a future stream of bytes?
-    // we apply content transfer encoding on it but no dot-staching as that
-    // is done by the protocol, through its part of the mail so it would be
-    // interesting to dispable dot staching on protocol level as we might
-    // have to implement support for it in this lib for non smtp mail transfer
-    // also CHUNKED does not use dot-staching making it impossible to use it
-    // with tokio-smtp
-    source: BoxStream<Item=u8, Error=Error>
+impl Mail {
+
+
+    /// adds a new header,
+    ///
+    /// - if the header already existed, the existing one will be overriden and the
+    ///   old header will be returned
+    /// - `Content-Transfer-Encoding` it might be overwritten later one
+    ///
+    /// # Failure
+    ///
+    /// if a Content-Type header is set, which conflicts with the body, mainly if
+    /// you set a multipart content type on a non-multipart body or the other way around
+    ///
+    pub fn set_header( &self, header: Header ) -> Result<Option<Header>> {
+        use headers::Header::*;
+
+        match &header {
+            &ContentType( ref mime ) => {
+                if self.body.is_multipart() != is_multipart_mime( mime ) {
+                    return Err( ErrorKind::ContentTypeAndBodyIncompatible.into() )
+                }
+            },
+            ContentTransferEncoding( ref encoding ) => {
+                //TODO warn as this is most likly leading to unexpected results
+            },
+            _ => {}
+        }
+
+        Ok( self.headers.insert( header.name().into(), header ) )
+
+    }
+
+    fn walk_mail_bodies_mut<FN>( &mut self, use_it_fn: FN)
+        where FN: FnMut( &mut Body )
+    {
+        use self::MailPart::*;
+        match self.body {
+            SingleBody { ref mut body } =>
+                use_it_fn( body ),
+            MultipleBodies { ref mut bodies, .. } =>
+                for body in bodies {
+                    body.walk_mail_bodies_mut( use_it_fn )
+                }
+        }
+    }
+}
+
+impl IntoFuture for Mail {
+    type Future = MailFuture;
+    type Item = Mail;
+    type Error = Error;
+
+    /// converts the Mail into a future,
+    ///
+    /// the future resolves once
+    /// all contained BodyFutures are resolved (or one of
+    /// them resolves into an error in which case it will
+    /// resolve to the error and cancel all other BodyFutures)
+    ///
+    ///
+    fn into_future(self) -> Self::Future {
+        MailFuture( self )
+    }
 }
 
 
+pub struct MailFuture( Option<Mail> );
 
-pub struct SinglepartMime( Mime );
+impl MailPart {
 
-impl SinglepartMime {
-    pub fn new( mime: Mime ) -> Result<Self> {
-        if mime.type_() != MULTIPART {
-            Ok( SinglepartMime( mime ) )
+    pub fn is_multipart( &self ) -> bool {
+        use self::MailPart::*;
+        match *self {
+            SingleBody { .. } => false,
+            MultipleBodies { .. } => true
+        }
+    }
+}
+
+
+impl Future for MailFuture {
+    type Item = Mail;
+    type Error = Error;
+
+    fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+        let mut done = true;
+        self.0.as_mut()
+            // this is conform with how futures work, as calling poll on a random future
+            // after it completes has unpredictable results (through one of NotRady/Err/Panic)
+            // use `Fuse` if you want more preditable behaviour in this edge case
+            .expect( "poll not to be called after completion" )
+            .walk_mail_bodies_mut( |body| {
+                match body.poll_body() {
+                    Ok( None ) =>
+                        done = false,
+                    Err( err ) => {
+                        return Err( err )
+                    }
+                }
+            });
+
+        if done {
+            Ok( Async::Ready( self.0.take().unwrap() ) )
         } else {
-            Err( ErrorKind::NotSinglepartMime( mime ).into() )
+            Ok( Async::NotReady )
         }
     }
-}
-
-impl Deref for SinglepartMime {
-    type Target = Mime;
-
-    fn deref( &self ) -> &Mime {
-        &self.0
-    }
-}
-
-pub struct MultipartMime( Mime );
-
-impl MultipartMime {
-
-    pub fn new( mime: Mime ) -> Result<Self> {
-        if mime.type_() == MULTIPART {
-            check_boundary( &mime )?;
-            Ok( MultipartMime( mime ) )
-        }  else {
-            Err( ErrorKind::NotMultipartMime( mime ).into() )
-        }
-
-    }
-}
-
-impl Deref for MultipartMime {
-    type Target = Mime;
-
-    fn deref( &self ) -> &Mime {
-        &self.0
-    }
-}
-
-fn check_boundary( mime: &Mime ) -> Result<()> {
-    mime.get_param( BOUNDARY )
-        .map( |_|() )
-        .ok_or_else( || ErrorKind::MultipartBoundaryMissing.into() )
 }

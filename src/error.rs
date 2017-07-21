@@ -71,5 +71,9 @@ error_chain! {
         Invalide8BitSeq( val: u8 ) {
             description( "the chars '\\r', '\\n' can only appear as \"\\r\\n\" in 8bit (content transfer) encoding " )
         }
+
+        BodyFutureResolvedToAnError {
+        
+        }
     }
 }
