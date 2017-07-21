@@ -84,7 +84,7 @@ fn encode_7bit( buf: Buffer ) -> Buffer {
 
 }
 
-fn encode_8bit( stream: ByteStream ) -> ByteStream {
+fn encode_8bit( stream: Buffer ) -> Buffer {
     let data: &[u8] = &*buf;
 
     let mut last = b'\0';
