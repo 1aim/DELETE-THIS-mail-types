@@ -60,7 +60,7 @@ fn generate_html_header<P: AsRef<Path>>( spec: P ) -> Result<(), Error> {
                   enum_name, rust_type )?;
 
         writeln!( &mut names_output,
-                  "\t{}( .. ) => unsafe {{ AsciiStr::from_ascii_unchecked( {:?} ) }},",
+                  "\t{}( .. ) => unsafe {{ HeaderNameRef::Static( AsciiStr::from_ascii_unchecked( {:?} ) ) }},",
                   enum_name, name )?;
 
         writeln!( &mut encode_match_output,
@@ -81,7 +81,7 @@ fn generate_html_header<P: AsRef<Path>>( spec: P ) -> Result<(), Error> {
     writeln!( &mut enum_output, "}}" )?;
 
     writeln!( &mut names_output,
-              "Other( ref name, .. ) => &*name" )?;
+              "Other( ref name, .. ) => HeaderNameRef::Other( &*name )" )?;
     writeln!( &mut names_output, "}} }} fn_impl }}")?;
 
     writeln!( &mut encode_match_output,

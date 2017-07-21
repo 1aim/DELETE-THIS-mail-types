@@ -1,3 +1,5 @@
+use std::borrow::{ Cow, ToOwned };
+
 use ascii::{ AsciiStr, AsciiChar };
 
 use error::*;
@@ -16,9 +18,25 @@ use codec::{  MailEncoder, MailEncodable };
 
 include! { concat!( env!( "OUT_DIR" ), "/header_enum.rs.partial" )  }
 
+//FIXME tendentially merge with types::HeaderName to some extend
+pub enum HeaderNameRef<'a> {
+    Static( &'static AsciiStr ),
+    Other( &'a AsciiStr )
+}
+
+impl<'a> Into<Cow<'static, AsciiStr>> for HeaderNameRef<'a> {
+    fn into( self ) -> Cow<'static, AsciiStr> {
+        use self::HeaderNameRef::*;
+        match self {
+            Static( static_ref ) => Cow::Borrowed( static_ref ),
+            Other( non_static_ref ) => Cow::Owned( non_static_ref.to_owned() )
+        }
+    }
+}
+
 impl Header {
 
-    pub fn name( &self ) -> &AsciiStr {
+    pub fn name<'a>( &'a self ) -> HeaderNameRef<'a> {
         use self::Header::*;
         //a match with arms like `Date( .. ) => unsafe { AsciiStr::from_ascii_unchecked( "Date" ) }`
         let fn_impl = include! { concat!( env!( "OUT_DIR" ), "/header_enum_names.rs.partial" )  };
