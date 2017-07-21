@@ -4,7 +4,7 @@ use quoted_printable;
 use std::collections::{ HashMap as Map };
 use std::sync::Mutex;
 
-use futures::stream::Stream;
+use futures::{ future, Future };
 
 use error::*;
 use utils::{ Buffer, BufferFuture };
@@ -31,7 +31,7 @@ pub type ByteStream = BoxStream<Item=u8, Error=Error>;
 
 //WHEN_FEATURE(check_multipart_boundaries)
 // change it to fn(Buffer, Boundary) -> Result<Buffer>
-pub type TransferEncoder = fn(Buffer) -> Result<Buffer>;
+pub type TransferEncoder = fn(Buffer) -> BufferFuture;
 
 pub struct EncoderStore {
     encoders: Map<TransferEncoding, EncodeStreamFn>,
@@ -68,8 +68,8 @@ impl EncoderStore {
 
 
 
-fn encode_7bit( buf: Buffer ) -> Buffer {
-    let data: &[u8] = &*buf;
+fn encode_7bit( mut buffer: Buffer ) -> BufferFuture {
+    let data: &[u8] = &*buffer;
 
     let mut last = b'\0';
     for byte in data {
@@ -82,10 +82,13 @@ fn encode_7bit( buf: Buffer ) -> Buffer {
         last = byte;
     }
 
+    buffer.set_content_transfer_encoding( TransferEncoding::_7Bit );
+    future::ok( buffer ).boxed()
+
 }
 
-fn encode_8bit( stream: Buffer ) -> Buffer {
-    let data: &[u8] = &*buf;
+fn encode_8bit( mut buffer: Buffer ) -> BufferFuture {
+    let data: &[u8] = &*buffer;
 
     let mut last = b'\0';
     for byte in data {
@@ -97,6 +100,9 @@ fn encode_8bit( stream: Buffer ) -> Buffer {
         }
         last = byte;
     }
+
+    buffer.set_content_transfer_encoding( TransferEncoding::_8Bit );
+    future::ok( buffer ).boxed()
 }
 
 /// to quote RFC 2045:
@@ -106,16 +112,22 @@ fn encode_8bit( stream: Buffer ) -> Buffer {
 ///
 /// nevertheless there is at last one SMTP extension which allows this
 /// (chunked),but this library does not support it for now
-fn encode_binary( buffer: Buffer ) -> Buffer {
-    buffer
+fn encode_binary( mut buffer: Buffer ) -> BufferFuture {
+    buffer.set_content_transfer_encoding( TransferEncoding::Binary );
+    future::ok( buffer ).boxed()
 }
 
-fn encode_quoted_printable( buffer: Buffer ) -> Buffer {
-    quoted_printable::encode( &*buffer ).into()
+fn encode_quoted_printable( buffer: Buffer ) -> BufferFuture {
+    let mut new: Buffer  = quoted_printable::encode( &*buffer ).into();
+    new.set_content_transfer_encoding( TransferEncoding::QuotedPrintable );
+    future::ok( new ).boxed()
 }
 
 fn encode_base64( buffer: Buffer ) -> Buffer {
-    base64::encode_config( &*buffer, base64::MIME )
+    let vec: Vec<u8> = base64::encode_config( &*buffer, base64::MIME ).into();
+    let mut buf: Buffer = vec.into();
+    buf.set_content_transfer_encoding( TransferEncoding::Base64 );
+    future::ok( buf ).boxed()
 }
 
 

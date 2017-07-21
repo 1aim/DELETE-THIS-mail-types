@@ -1,8 +1,12 @@
+use mime::Mime;
+use futures::Either;
+
+use utils::{ Buffer, MimeBitDomain };
+use types::TransferEncoding;
 
 //FIXME possible merge with ressource
 #[derive(Debug)]
 pub struct Body {
-    transfer_encoding: TransferEncoding,
     body: InnerBody
 }
 
@@ -24,20 +28,50 @@ enum InnerBody {
 
 
 impl Body {
-    pub fn new( unencoded: BufferFuture, transfer_encoding: TransferEncoding ) -> Result<Body> {
-        let tencode_fn = TRANSFER_ENCODINGS.lookup( &transfer_encoding )?;
-        //for now tencoder is a function, if not make it
-        //move |buffer| { tencoder.encode( ... ) }
-        let res = unencoded.and_then( tencode_fn );
+
+    /// creates a new body based on the `data` Buffer,
+    ///
+    /// if data is not yet transfer encoded:
+    /// - it will be encoded with transfer_encoding if it is some
+    /// - or if it 7bit it won't be encode (but checked)
+    /// - or it will be encoded with QuotedPrintable if it is text
+    /// - or it will be encoded with base64 if it isn't text
+    ///
+    /// if data is already transfer encoded and `transfer_encoding` is
+    /// `transfer_encoding` will be ignores, but a warning is triggered
+    pub fn new( data: BufferFuture, transfer_encoding: Option<TransferEncoding> ) -> Result<Body> {
+        let preset =
+            match transfer_encoding.map( |encoding| TRANSFER_ENCODINGS.lookup( encoding ) ) {
+                Some( result ) => Some( result? ),
+                None => None
+            };
+        
+        let body_future = data.and_then( move |buffer: Buffer| {
+             if buffer.content_transfer_encoding().is_some() {
+                 //TODO if preset.is_some() { warn!() }
+                 return future::ok( buffer ).boxed();
+             }
+             let func = preset.unwrap_or_else(|| {
+                 let encoding =
+                     if buffer.bit_domain == MimeBitDomaim::_7Bit {
+                         TranserEncoding::_7Bit
+                     } else if buffer.is_text() {
+                         TransferEncoding::QuotedPrintable
+                     } else {
+                         TransferEncoding::Base64
+                     };
+                TRANSFER_ENCODINGS.lookup( encoding )
+                    .expect( "_7Bit/quoted_printable/base64 are preset and therefore can not be not available" );
+            });
+
+            func( buffer )
+
+        }).boxed();
+
         Body {
-            transfer_encoding: transfer_encoding,
-            body: InnerBody::Future( res )
+            body: InnerBody::Future( body_future )
         }
     }
-
-    //WHEN_FEATURE(fast_ascii_mails)
-    //is a optimization postpone it for now
-    //fn new_just_ascii(...)
 
     /// returns a reference to the buffer if
     /// the buffer is directly contained in the Body,
