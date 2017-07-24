@@ -2,13 +2,13 @@ use std::fmt;
 use ascii::AsciiStr;
 
 use error::*;
-use types::shared::Item;
+use components::shared::Item;
 use codec::{MailDecodable, MailEncodable, MailEncoder};
 
 
-use types::components::data_types;
-use types::components::data_types::View;
-use types::components::behaviour::encode::EncodeComponent;
+use components::components::data_types;
+use components::components::data_types::View;
+use components::components::behaviour::encode::EncodeComponent;
 
 
 pub struct Address {

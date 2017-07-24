@@ -6,8 +6,8 @@ use ::ascii::{ AsciiChar, AsAsciiStr };
 use error::*;
 use codec::MailEncoder;
 use codec::utf8_to_ascii::puny_code_domain;
-use types::components::data_types::*;
-use types::shared::Item;
+use components::components::data_types::*;
+use components::shared::Item;
 
 pub trait EncodeComponent {
     fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()>;
@@ -123,7 +123,7 @@ impl EncodeComponent for Unstructured {
 #[cfg(test)]
 mod test {
     use codec::Bits8State;
-    use types::shared::Item;
+    use components::shared::Item;
     use super::*;
 
 

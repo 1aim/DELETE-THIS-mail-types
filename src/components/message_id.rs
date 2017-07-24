@@ -2,9 +2,9 @@ use ascii::AsciiChar;
 
 use error::*;
 use codec::{ MailEncoder, MailEncodable };
-use types::shared::Item;
-use types::components::data_types::Email;
-use types::components::behaviour::encode::EncodeComponent;
+use components::shared::Item;
+use components::components::data_types::Email;
+use components::components::behaviour::encode::EncodeComponent;
 
 pub struct MessageID {
     inner: Item,

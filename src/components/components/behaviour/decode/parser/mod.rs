@@ -1,4 +1,4 @@
-use types::components::data_types::*;
+use components::components::data_types::*;
 use self::slice::Slice;
 use super::super::utils::{ is_ws, is_ctext, is_vchar, is_atext, is_qtext };
 
