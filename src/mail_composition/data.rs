@@ -3,35 +3,44 @@ use std::mem::replace;
 
 use serde;
 
-use super::resource;
-use super::resource::Resource;
-use super::context::{ Context, ContentId };
+use mail::resource::Resource;
+use super::resource::{
+    Embeddings, Attachments,
+    EmbeddingInMail, AttachmentInMail
+};
+use super::context::{
+    Context, ContentId
+};
+
 
 type Mailbox = TODO;
 
-pub trait DataInterface {
+pub trait DataInterface: serde::Serialize {
 
     fn find_externals<F1,F2>( &mut self, emb: F1, att: F2 )
-        where F1: FnMut( &mut Embedding ),
-              F2: FnMut( &mut Attachment);
+        where F1: FnMut( &mut EmbeddingInData),
+              F2: FnMut( &mut AttachmentInData);
 
     fn see_from_mailbox(&mut self, mbox: &Mailbox );
     fn see_to_mailbox(&mut self, mbox: &Mailbox );
 }
 
-//FIXME PathBuf => FileSource
+
+
 #[derive(Debug, Serialize)]
-pub struct Embedding(InnerEmbedding);
+pub struct EmbeddingInData(InnerEmbedding);
 #[derive(Debug)]
 enum InnerEmbedding {
     AsValue( Resource ),
     AsContentId( ContentId )
 }
 
-impl Embedding {
+impl EmbeddingInData {
     pub fn new( resource: Resource ) -> Self {
-        Embedding( InnerEmbedding::AsValue( resource ) )
+        EmbeddingInData( InnerEmbedding::AsValue( resource ) )
     }
+
+    //TODO access methods for the AsValue variant
 
     fn swap_with_content_id( &mut self, cid: ContentId ) -> Option<Resource> {
         use self::InnerEmbedding::*;
@@ -52,6 +61,7 @@ impl serde::Serialize for InnerEmbedding {
             AsValue( .. ) => Err( S::Error::custom( concat!(
                 "embeddings can be serialized as content id, not as value, "
                 "preprocess_data should have ben called before" ) ) ),
+            //FIXME potentialy use cid encode as string!
             AsContentId( cid ) => cid.serialize( serializer )
         }
     }
@@ -59,7 +69,7 @@ impl serde::Serialize for InnerEmbedding {
 
 //FIXME PathBuf => FileSource
 #[derive(Debug, Serialize)]
-pub struct Attachment(InnerAttachment );
+pub struct AttachmentInData(InnerAttachment );
 #[derive(Debug)]
 enum InnerAttachment {
     AsValue( Resource ),
@@ -68,10 +78,12 @@ enum InnerAttachment {
     Moved
 }
 
-impl Attachment {
+impl AttachmentInData {
     pub fn new( resource: Resource ) -> Self {
-        Attachment( InnerAttachment::AsValue( resource ) )
+        AttachmentInData( InnerAttachment::AsValue( resource ) )
     }
+
+    //TODO access methods for the AsValue variant
 
     fn move_out( &mut self ) -> Option<Resource> {
         use self::InnerAttachment::*;
@@ -97,8 +109,8 @@ impl serde::Serialize for InnerAttachment {
     }
 }
 
-pub fn preprocess_data<D: DataInterface>( ctx: &Context, data: &mut D )
-    -> (Vec<resource::Embedding>, Vec<resource::Attachment>)
+pub fn preprocess_data<C: Context, D: DataInterface>( ctx: &C, data: &mut D )
+    -> (Embeddings, Attachments)
 {
     let mut embeddings = Vec::new();
     let mut attachments = Vec::new();

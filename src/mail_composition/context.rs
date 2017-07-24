@@ -1,32 +1,21 @@
+use std::sync::Arc;
+use mail::BuilderContext;
 
 //TODO replace with types::ContentId
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Serialize)]
 pub struct ContentId( String );
 
-#[derive(Debug)]
-pub struct Context {
-    support: Support
+
+trait Context: BuilderContext {
+    fn new_content_id( &self ) -> ContentId;
 }
 
-impl Context {
-
+impl<T: Context> Context for Arc<T> {
     fn new_content_id( &self ) -> ContentId {
-
-    }
-
-    fn support( &self ) -> Support {
-        self.support
+        (*self).new_content_id()
     }
 }
 
-#[derive(Debug, Clone, Copy, Hash, Eq, PartialEq)]
-pub enum Support {
-    Ascii,
-    //ascii but allows 8bit encodings for the body
-    Ascii8BitMime,
-    // requires smtputf8
-    Internationalized
-}
 
 
 type Mailbox = TODO:

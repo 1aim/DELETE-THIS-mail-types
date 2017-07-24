@@ -1,154 +1,303 @@
+use std::sync::Arc;
 use std::path::PathBuf;
 use std::fmt;
-use futures::stream::BoxStream;
-use ascii::{ AsciiChar, AsciiString };
+use std::mem;
+
+
+use rand;
+use futures::future::BoxFuture;
+use ascii::AsciiStr;
 use mime;
 
 use error::*;
 use headers::Header::*;
 use types;
-use raw_mail::{ SinglepartMime, MultipartMime, SinglepartMail, MailPart };
+
+use mail::mime::{
+    SinglepartMime,
+    MultipartMime
+};
+
+use mail::resource::Resource;
+use mail::{
+    Mail, MailPart,  Builder,
+    BuilderContext
+};
 
 use self::data::preprocess_data;
-use self::ports::{
-    Template,
-    DataInterface,
-    AttachmentOut,
-    Stream,
-    EmbeddingOut
-};
 use self::context::{
+    Context,
     MailSendContext
 };
+use self::templates::{ Template, TemplateEngine };
 
-pub mod ports;
+
+pub use self::data::{
+    EmbeddingInData, AttachmentInData,
+    DataInterface
+};
+pub use self::resource::{
+    EmbeddingInMail, AttachmentInMail,
+    Embeddings, Attachments
+};
+
+
 pub mod context;
+pub mod templates;
 mod resource;
 mod data;
 
 
+pub trait NameComposer<D> {
+    fn compose_name( &self, data: &D ) -> String;
+}
 
-pub trait ComposeMail: TemplateEngine {
-    fn compose_mail<D: DataInterface>
-        ( &self,
-          context: &Context,
-          send_context: MailSendContext,
-          data: D,
-          template: <Self as TemplateEngine>::TemplateId
-        ) -> Result< Stream >
-    {
+pub type BodyWithEmbeddings = (Resource, Embeddings);
+
+
+pub struct Compositor<T, C, CP> {
+    template_engine: T,
+    context: C,
+    name_composer: CP
+}
+
+
+impl<T, C, CP, D> Compositor<T, C, CP>
+    where T: TemplateEngine,
+          C: Context,
+          CP: NameComposer<D>,
+          D: DataInterface
+{
+    pub fn new( template_engine: T, context: C, name_composer: CP ) -> Self {
+        Compositor { template_engine, context, name_composer }
+    }
+
+    pub fn builder( &self ) -> Builder<C> {
+        Builder( self.context.clone() )
+    }
+
+    /// composes a mail based on the given template_id, data and send_context
+    pub fn compose_mail( &self,
+                         send_context: MailSendContext,
+                         data: D,
+                         template_id: T::TemplateId
+    ) -> Result<Mail> {
+
         let mut data = data;
-        let from_mailbox = send_context.from;//compose display name => create Address with display name;
-        let to_mailbox = send_context.to.display_name_or_else(
-            || self.compose_display_name( context, &data ) );
-
-        data.see_from_mailbox( &from_mailbox );
-        data.see_to_mailbox( &to_mailbox );
+        //compose display name => create Address with display name;
+        let ( subject, from_mailbox, to_mailbox ) =
+            self.preprocess_send_context( send_context, &mut data );
 
         let core_headers = vec![
-            From( types::AddressList::new_with_first( from_mailbox ) ),
-            To( types::AddressList::new_with_first( to_mailbox ) ),
-            Subject( types::Unstructured::try_from_string( send_context.subject )? )
+            From( from_mailbox ),
+            To( to_mailbox ),
+            Subject( subject )
             //TODO: what else? MessageId? Signature? ... or is it added by relay
         ];
 
-        let ( embeddings, attatchments ) = preprocess_data( context, &mut data );
+        let ( embeddings, mut attachments ) = self.preprocess_data( &mut data );
 
-        let alternate_bodies = self.templates( context, template, data )?;
+        let ( bodies, extracted_attachments ) =
+            self.preprocess_templates(
+                self.template_engine.templates( context, template_id, data )? );
 
-        if alternate_bodies.len() == 0 {
-            return Err( ErrorKind::NeedPlainAndOrHtmlMailBody.into() )
-        }
+        attachments.extend( extracted_attachments );
 
+        self.build_mail( bodies, attachments, core_headers )
+    }
+
+    /// converts To into a mailbox by composing a display name if nessesary,
+    /// and converts the String subject into a "Unstructured" text
+    /// returns (subjcet, from_mail, to_mail)
+    pub fn preprocess_send_context( &self, sctx: MailSendContext, data: &mut D )
+        -> (types::Unstructured, Mailbox, Mailbox)
+    {
+        let from_mailbox = sctx.from;
+        let to_mailbox = sctx.to.display_name_or_else(
+            || self.name_composer.compose_name( data )
+        );
+        let subject = types::Unstructured::from_string( sctx.subject );
+        data.see_from_mailbox( &from_mailbox );
+        data.see_to_mailbox( &to_mailbox );
+        ( subject, from_mailbox, to_mailbox )
+    }
+
+    /// Preprocesses the data moving attachments out of it and replacing
+    /// embeddings with a ContentID created for them
+    /// returns the extracted embeddings and attchments
+    pub fn preprocess_data( &self, data: &mut D ) -> (Embeddings, Attachments) {
+        preprocess_data( self.context, data )
+    }
+
+    /// maps all alternate bodies (templates) to
+    /// 1. a single list of attachments as they are not body specific
+    /// 2. a list of Resource+Embedding pair representing the different (sub-) bodies
+    pub fn preprocess_templates( &self, templates: Vec<Template> )
+        -> (Vec<BodyWithEmbeddings>, Vec<Attachments>)
+    {
+        let mut bodies = Vec::new();
         let mut attachments = Vec::new();
-        let mut bodies = Vec::new();
-        for body in alternate_bodies {
-            bodies.push( create_mail_body(body, &mut attachments )? );
+        for template in templates {
+            bodies.push( (template.body, template.embeddings) );
+            attachments.extend( template.attachments );
         }
-        let has_attachments = attachments.len() > 0;
+        (bodies, attachments)
+    }
 
-        let core_mail = MailPart::Multipart {
-            mime: gen_multipart_mime( "alternate" ),
-            bodies: bodies,
-            additional_headers: if has_attachments { Vec::new() } else { core_headers },
-            hidden_text: AsciiString::new()
+
+    /// uses the results of preprocessing data and templates, as well as a list of
+    /// mail headers like `From`,`To`, etc. to create a new mail
+    pub fn build_mail( &self,
+                       bodies: Vec<BodyWithEmbeddings>,
+                       attachments: Attachments,
+                       core_headers: Vec<Header>
+    ) -> Result<Mail> {
+        let builder = self.builder();
+        let mail = match attachments.len() {
+            0 => builder.create_alternate_bodies( bodies, core_headers )?,
+            n => builder.create_with_attachments(
+                |bb| bb.create_alternate_bodies( bodies, Vec::new() ),
+                attachments,
+                core_headers
+            )?
         };
+    }
+}
 
-        let mail = if !has_attachments {
-            core_mail
+
+
+
+pub trait BuilderExt {
+    fn create_alternate_bodies( &self, bodies: Vec<BodyWithEmbeddings>, header: Vec<Header> ) -> Result<Mail>;
+
+    fn create_mail_body( &self, body: BodyWithEmbeddings, headers: Vec<Header> ) -> Result<Mail>;
+
+    fn create_with_attachments<FN>(&self, body: FN, attachments: Attachments, headers: Vec<Headers> )
+                                   -> Result<Mail>
+        where FN: FnOnce( &Self ) -> Result<Mail>;
+
+    fn create_body_from_resource( &self, resource: Resource, headers: Vec<Header> ) -> Result<Mail>;
+
+    fn create_body_with_embeddings( &self, resource: Resource, embeddings: Embeddings, headers: Vec<Header> )
+        -> Result<Mail>;
+}
+
+
+
+impl<E: BuilderContext> BuilderExt for Builder<E> {
+
+    fn create_alternate_bodies( &self,  bodies: Vec<BodyWithEmbeddings>, headers: Vec<Header> ) -> Result<Mail> {
+        let mut bodies = bodies;
+
+        let first;
+        match bodies.len() {
+            0 => return Err( ErrorKind::NeedPlainAndOrHtmlMailBody.into() ),
+            1 => return self.create_mail_body(bodies.pop().unwrap(), headers ),
+            n => {}
+        }
+
+        let mut builder = self
+            .new( MultipartMime( gen_multipart_mime( ascii_str!{ a l t e r n a t e }) )? );
+
+        for header in headers {
+            builder = builder.add_header( header )?;
+        }
+
+        for body in bodies {
+            builder = builder.add_body( |bb| bb.create_single_mail_body( body, vec![] ) )?;
+        }
+
+        builder.build()
+    }
+
+    fn create_mail_body(&self, body: BodyWithEmbeddings, headers: Vec<Header> ) -> Result<Mail> {
+        let (resource, embeddings) = body;
+        if embeddings.len() > 0 {
+            self.create_body_with_embeddings( resource, embeddings, headers );
         } else {
-            MailPart::Multipart {
-                mime: gen_multipart_mime( "mixed" ),
-                bodies: attachments.map(cre).collect(),
-                additional_headers: core_headers,
-                hidden_text: AsciiString::new()
-            }
-        };
+            self.create_body_from_resource( resource, headers );
+        }
+    }
+
+    fn create_body_from_resource( &self, resource: Resource, headers: Vec<Header> ) -> Result<Mail> {
+        self.singlepart( resource )
+            .set_headers( headers )?
+            .build()
+    }
+
+    fn create_body_with_embeddings( &self, resource: Resource, embeddings: Embeddings, headers: Vec<Header> )
+        -> Result<Mail>
+    {
+        let mut builder = self.multipart( gen_multipart_mime( ascii_str!{ r e l a t e d } )? ).set_headers( headers )?;
+        builder = builder.add_body( |b| b.create_body_from_resource( resource, Vec::new() ) )?;
+        for embedding in embeddings {
+            builder = builder.add_body( |b|
+                b.create_body_from_resource( embedding.resource , vec![
+                    Header::ContentID( embedding.content_id ),
+                    Header::ContentDisposition( Disposition::Inline )
+                ])
+            )
+        }
+        builder.build()
+    }
 
 
-        let mut encoder = TokioStremMailEncoder::new();
+    fn create_with_attachments<FN>( &self, body: FN, attachments: Vec<AttachmentInMail>, headers: Vec<Headers> )
+        -> Result<Mail>
+        where FN: FnOnce( SubBuilder ) -> Result<Mail>
+    {
+        let mut builder = self.multipart( gen_multipart_mime( ascii_str!{ m i x e d } ) )
+                          .set_headers( headers )?
+                          .add_body( body )?;
 
-        //this might have to block on reading from the body stream...
-        mail.encode( &mut encoder )?;
+        for attachment in attachments {
+            builder = builder.add_body( |b| b.create_body_from_resource(
+                attachment,
+                vec![
+                    Header::ContentDisposition( Disposition::Attachment )
+                ]
+            ))?;
+        }
 
-        Ok( encoder.into_stream() )
-
+        builder.build()
     }
 }
 
 
-fn create_mail_body(tmpl: Template, attatchments: &mut Vec<AttachmentOut> ) -> Result<MailPart> {
-    attatchments.extend( tmpl.attachments );
 
-    let mut headers = Vec::new();
+fn gen_multipart_mime( subtype: &AsciiStr ) -> Result<MultipartMime> {
+    //TODO check if subtype is a "valide" type e.g. no " " in ot
 
-    let body_stream = match tmpl.data {
-        Stream::Ascii( ascii_stream ) => ascii_stream,
-        Stream::NonAscii( stream ) => {
-            headers.push( ContentTransferEncoding( types::TransferEncoding::Base64 ) );
-            base64_encode_stream( stream )
-        }
-    };
+    const MULTIPART_BOUNDARY_LENGTH: usize = 30;
+    static CHARS: &[char] = &[
+        '!',      '#', '$', '%', '&', '\'', '(',
+        ')', '*', '+', ',',      '.', '/', '0',
+        '1', '2', '3', '4', '5', '6', '7', '8',
+        '9', ':', ';', '<', '=', '>', '?', '@',
+        'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+        'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+        'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X',
+        'Y', 'Z', '[',      ']', '^', '_', '`',
+        'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
+        'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
+        'q', 'r', 's', 't', 'u', 'v', 'w', 'x',
+        'y', 'z', '{', '|', '}', '~'
+    ];
 
-    let inner_body = MailPart::Body( SinglepartMail {
-        mime: SinglepartMime::new( tmpl.mime )?,
-        headers: headers,
-        source: body_stream
-    } );
 
-    if tmpl.embeddings.len() == 0 {
-        Ok( inner_body )
-    } else {
-        let mut bodies = Vec::new();
-        for body in tmpl.embeddings {
-            bodies.push( create_embedding_body( body )? )
-        }
-        Ok( MailPart::Multipart {
-            mime: gen_multipart_mime( "related" )?,
-            bodies: bodies,
-            additional_headers: Vec::new(),
-            hidden_text: AsciiString::new()
-        } )
+    // we add =_^ to the boundary, as =_^ is neither valide in base64 nor quoted-printable
+    let mut mime_string = format!( "multipart/{}; boundary=\"=_^", subtype );
+    let mut rng = rand::thread_rng();
+    for _ in 0..MULTIPART_BOUNDARY_LENGTH {
+        mime_string.push( CHARS[ rng.gen_range( 0, CHARS.len() )] )
     }
+    mime_string.push('"');
+
+    MultipartMime::new(
+        //can happen if subtype is invalid
+        mime_string.parse().chain_err(|| ErrorKind::GeneratingMimeFailed.into() )?
+    ).chain_err( || ErrorKind::GeneratingMimeFailed.into() )
 }
-
-
-fn create_embedding_body( body: EmbeddingOut ) -> Result<MailPart> {
-    //TODO with Content-Transfer-Encoding, and Content-Disposition
-}
-
-fn create_attachment_body( body: AttachmentOut ) -> Result<MailPart> {
-    //TODO with Content-Transfer-Encoding, and Content-Disposition
-}
-
-
-fn gen_multipart_mime( subtype: &str ) -> Result<MultipartMime> {
-    // 1. gen boundary
-    // 2. "multipart/" + subtype + "; boundary=\"" boundary + "\""
-}
-
-
-impl<T> ComposeMail for T where T: TemplateEngine { }
 
 
 

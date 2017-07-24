@@ -75,5 +75,13 @@ error_chain! {
         BodyFutureResolvedToAnError {
         
         }
+
+        NeedAtLastOneBodyInMultipartMail {
+
+        }
+
+        GeneratingMimeFailed {
+
+        }
     }
 }

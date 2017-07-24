@@ -21,6 +21,7 @@ pub use self::builder::*;
 mod utils;
 pub mod body;
 pub mod resource;
+pub mod mime;
 mod builder;
 mod encode;
 
@@ -33,9 +34,6 @@ pub struct Mail {
     // unnecessary allocations
     headers: Headers,
     body: MailPart,
-    // can be used for warnings, as any non X-, non Content- header in a body
-    // will be ignored and is pointless
-    is_sub_body: bool
 }
 
 
@@ -87,6 +85,14 @@ impl Mail {
 
         Ok( self.headers.insert( header.name().into(), header ) )
 
+    }
+
+    pub fn headers( &self ) -> &[Header] {
+        &*self.headers
+    }
+
+    pub fn body( &self ) -> &MailPart {
+        &self.body
     }
 
     fn walk_mail_bodies_mut<FN>( &mut self, use_it_fn: FN)
