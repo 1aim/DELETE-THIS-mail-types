@@ -258,6 +258,22 @@ e.g. empty domain
 
 other features like signature, encryption etc.
 
+check what happens if I "execute" a async/mio/>tokio<
+based future in a CPU pool? Does it just do live
+polling in the thread? Or does it act more intelligent?
+or does it simply fail?
+
+just before encoding singlepart bodies, resource is resolved,
+therefore:
+
+1. we now have the Mime + File meta + TransferEncoding
+2. add* ContentType header to headers
+3. add* ContentTransferEncoding header to headers
+4. add* file meta infor to ContentDisposition header if it exists
+5. note that >add*< is not modifying Mail, but adds it to the list of headers to encode
+
+
+
 # Dependencies
 
 quoted_printable and base64 have some problems:
