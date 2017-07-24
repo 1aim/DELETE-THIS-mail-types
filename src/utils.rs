@@ -1,26 +1,47 @@
 use std::ops::Deref;
 
+use chrono;
 use mime::{ Mime, Name, CHARSET, TEXT };
+use ascii::AsciiString;
 use futures::BoxFuture;
 
 use types::TransferEncoding;
 
-trait PushIfSome<T> {
-    fn push_if_some( &mut self, val: Option<T> );
-}
+//trait PushIfSome<T> {
+//    fn push_if_some( &mut self, val: Option<T> );
+//}
+//
+//impl<T> PushIfSome<T> for Vec<T> {
+//    #[inline]
+//    fn push_if_some( &mut self, val: Option<T> ) {
+//        if let Some( val ) = val {
+//            self.push( val );
+//        }
+//    }
+//}
 
-impl<T> PushIfSome<T> for Vec<T> {
-    #[inline]
-    fn push_if_some( &mut self, val: Option<T> ) {
-        if let Some( val ) = val {
-            self.push( val );
-        }
+
+pub struct DateTime( chrono::DateTime<chrono::Utc> );
+
+impl DateTime {
+    fn new<TZ: chrono::TimeZone>( date_time: chrono::DateTime<TZ>) -> DateTime {
+        DateTime( date_time.with_timezone( &chrono::Utc ) )
     }
 }
 
-
-//TODO like name, cration_data, etc. all for themself optional
-type FileMeta = ();
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Default)]
+pub struct  FileMeta {
+    // in rust std this is OsString, but we can not have it
+    // os specific in any way, as it is send over internet,
+    // originally this was Ascii, but has been extended
+    // to support encoding
+    // FEATURE_TODO(utf8_file_names): AsciiString => String
+    pub file_name: Option<AsciiString>,
+    pub creation_date: Option<DateTime>,
+    pub modification_date: Option<DateTime>,
+    pub read_date: Option<DateTime>,
+    pub size: Option<usize>
+}
 
 // WHEN_FEATURE(more_charsets)
 // for now this is just a vector,

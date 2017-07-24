@@ -39,3 +39,6 @@ pub use self::transfer_encoding::TransferEncoding;
 
 mod phrase_list;
 pub use self::phrase_list::PhraseList;
+
+mod disposition;
+pub use self::disposition::{ Disposition, DispositionParameter, DispositionKind };

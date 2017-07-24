@@ -234,7 +234,7 @@ impl<E: BuilderContext> BuilderExt for Builder<E> {
             builder = builder.add_body( |b|
                 b.create_body_from_resource( embedding.resource , vec![
                     Header::ContentID( embedding.content_id ),
-                    Header::ContentDisposition( Disposition::Inline )
+                    Header::ContentDisposition( types::Disposition::inline() )
                 ])
             )
         }
@@ -254,7 +254,7 @@ impl<E: BuilderContext> BuilderExt for Builder<E> {
             builder = builder.add_body( |b| b.create_body_from_resource(
                 attachment,
                 vec![
-                    Header::ContentDisposition( Disposition::Attachment )
+                    Header::ContentDisposition( types::Disposition::attachment() )
                 ]
             ))?;
         }
