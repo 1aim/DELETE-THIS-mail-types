@@ -30,5 +30,5 @@ pub mod codec;
 pub mod headers;
 pub mod components;
 
-pub mod util_types;
+pub mod types;
 mod utils;
