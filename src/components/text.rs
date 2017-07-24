@@ -7,6 +7,7 @@ use codec::{ MailEncoder, MailEncodable };
 use super::shared::Item;
 use super::components::data_types::{View, Email};
 use super::components::behaviour::encode::EncodeComponent;
+use char_validators::encoded_word::EncodedWordContext;
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct Text {
@@ -27,7 +28,7 @@ impl MailEncodable for Text {
             //as such we can split it at any point, not that we still cant put line breakes
             //in there **encoded words in have to parsable as a single token** do not confuse
             //with qutable-encoding on itself
-            encoder.write_encoded_word( text )
+            encoder.write_encoded_word( text, EncodedWordContext::Text )
         }
         Ok( () )
     }

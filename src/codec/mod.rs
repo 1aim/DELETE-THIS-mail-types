@@ -2,6 +2,9 @@ use std::fmt;
 use std::result::{ Result as StdResult };
 use std::ascii::AsciiExt;
 
+use char_validators::{ is_atext, MailType };
+use char_validators::encoded_word::EncodedWordContext;
+
 use ascii::{ AsciiString, AsciiStr, AsciiChar };
 
 use error::*;
@@ -9,30 +12,30 @@ use error::*;
 pub mod transfer_encoding;
 pub mod utf8_to_ascii;
 
-use self::utf8_to_ascii::q_encode;
+use self::utf8_to_ascii::q_encode_for_encoded_word;
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-pub enum Bits8State {
-    Unsupported,
-    Supported,
-    Used
-}
-
-impl Bits8State {
-    pub fn is_supported( &self ) -> bool {
-        use self::Bits8State::*;
-        match *self {
-            Supported | Used => true,
-            Unsupported => false
-        }
-    }
-    pub fn is_used( &self ) -> bool {
-        match *self {
-            Bits8State::Used => true,
-            _ => false
-        }
-    }
-}
+//#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+//pub enum Bits8State {
+//    Unsupported,
+//    Supported,
+//    Used
+//}
+//
+//impl Bits8State {
+//    pub fn is_supported( &self ) -> bool {
+//        use self::Bits8State::*;
+//        match *self {
+//            Supported | Used => true,
+//            Unsupported => false
+//        }
+//    }
+//    pub fn is_used( &self ) -> bool {
+//        match *self {
+//            Bits8State::Used => true,
+//            _ => false
+//        }
+//    }
+//}
 
 //TODO add a Context + with_context (+ make MailEncoder a trait?)
 //for encoding headers, we:
@@ -46,7 +49,10 @@ pub struct MailEncoder {
     current_line_byte_length: usize,
     last_cfws_pos: Option<usize>,
     //FIXME change to _8bit_support as this is the thinks which matters
-    bits8_support: Bits8State
+    //TODO phase out, replace with MailType::{Internationalized OR Ascii}
+    //  we might add a 8BITMIME flag back in later, but not for now
+    //bits8_support: Bits8State,
+    mail_type: MailType
 }
 
 fn is_7bit_data( data: &[u8] ) -> bool {
@@ -59,14 +65,10 @@ fn is_7bit_data( data: &[u8] ) -> bool {
 }
 
 impl MailEncoder {
-    pub fn new(bits8_supported: bool) -> MailEncoder {
-        let bits8_supported = if bits8_supported {
-            Bits8State::Supported
-        } else {
-            Bits8State::Unsupported
-        };
+    pub fn new(mail_type: MailType) -> MailEncoder {
+
         MailEncoder {
-            bits8_support: bits8_supported,
+            mail_type: mail_type,
             inner: Vec::new(),
             current_line_byte_length: 0,
             last_cfws_pos: None
@@ -101,6 +103,18 @@ impl MailEncoder {
         };
     }
 
+    pub fn mail_type( &self ) -> MailType {
+        self.mail_type
+    }
+    pub fn try_write_atext( &mut self, str: &str ) -> Result<()> {
+        if word.chars().all( |ch| is_atext( ch, self.mail_type() ) ) {
+            self.write_data_unchecked( str.as_bytes() );
+            Ok( () )
+        } else {
+            bail!( "can not write atext, input is not valid atext" );
+        }
+    }
+
     pub fn write_str( &mut self, str: &AsciiStr ) {
         self.write_data_unchecked( str.as_bytes() );
     }
@@ -109,18 +123,18 @@ impl MailEncoder {
         self.write_byte_unchecked( char.as_byte() );
     }
 
-    pub fn try_write_8bit_data( &mut self, data: &[u8] ) -> Result<()> {
-        use self::Bits8State::*;
-        match self.bits8_support {
-            Unsupported if !is_7bit_data( data ) =>
-                return Err( ErrorKind::TriedWriting8BitBytesInto7BitData.into() ),
-            Supported if !is_7bit_data( data ) =>
-                self.bits8_support = Used,
-            _ => {}
-        }
-        self.write_data_unchecked( data );
-        Ok( () )
-    }
+//    pub fn try_write_8bit_data( &mut self, data: &[u8] ) -> Result<()> {
+//        use self::Bits8State::*;
+//        match self.bits8_support {
+//            Unsupported if !is_7bit_data( data ) =>
+//                return Err( ErrorKind::TriedWriting8BitBytesInto7BitData.into() ),
+//            Supported if !is_7bit_data( data ) =>
+//                self.bits8_support = Used,
+//            _ => {}
+//        }
+//        self.write_data_unchecked( data );
+//        Ok( () )
+//    }
 
     fn write_byte_unchecked(&mut self, byte: u8 ) {
         //FIXME: potentially keep track of "line ending state" to prevent rogue '\r' '\n'
@@ -141,7 +155,7 @@ impl MailEncoder {
     }
 
     //we want to encode < for
-    pub fn write_encoded_word( &mut self, data: &str ) {
+    pub fn write_encoded_word( &mut self, data: &str, ctx: EncodedWordContext ) {
         //FIXME there are two limites:
         // 1. the line length limit of 78 chars per line (including header name!)
         // 2. the quotable_string limit of 75 chars including quotings IN HEADERS ONLY (=?utf8?Q?<data>?=)
@@ -149,7 +163,7 @@ impl MailEncoder {
         self.write_str( ascii_str! {
             Equal Question u t f _8 Question Q Question
         });
-        q_encode( data, self );
+        q_encode_for_encoded_word(self, ctx, data );
         self.write_str( ascii_str! {
             Question Equal
         })
@@ -166,7 +180,6 @@ impl MailEncoder {
                 insert_bytes(&mut self.inner, cfws_pos, b"\r\n " );
             }
 
-            // could be bits8 under some circumstances
             self.current_line_byte_length = self.inner.len() - (cfws_pos + 2)
         }
     }
@@ -175,15 +188,15 @@ impl MailEncoder {
         self.current_line_byte_length
     }
 
-    pub fn bits8_support(&self ) -> Bits8State {
-        self.bits8_support
-    }
+
 
     pub fn into_ascii_string( self ) -> StdResult<AsciiString, Self> {
-        if self.bits8_support.is_used() {
+        if self.mail_type == MailType::Internationalized {
             Err( self )
         } else {
-            Ok( unsafe { AsciiString::from_ascii_unchecked( self.inner ) } )
+            //OPTIMIZE: use unchecked conversion
+            //Ok( unsafe { AsciiString::from_ascii_unchecked( self.inner ) } )
+            Ok( AsciiString::from_ascii( self.inner ).unwrap() )
         }
     }
 
@@ -220,15 +233,15 @@ impl Into<Vec<u8>> for MailEncoder {
 
 pub trait MailEncodable {
 
-    fn encode( &self, &mut MailEncoder ) -> Result<()>; //possible Cow later on
+    fn encode( &self, encoder:  &mut MailEncoder ) -> Result<()>; //possible Cow later on
 }
 
-pub trait MailDecodable: Sized {
-
-    //FIXME maybe &[u8]
-    fn decode( &str ) -> Result<Self>; //maybe AsRef<AsciiStr>
-
-}
+//pub trait MailDecodable: Sized {
+//
+//    //FIXME maybe &[u8]
+//    fn decode( &str ) -> Result<Self>; //maybe AsRef<AsciiStr>
+//
+//}
 
 
 #[cfg(unimplemented_test)]

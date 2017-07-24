@@ -1,8 +1,9 @@
 use ascii::{ AsciiString, AsAsciiStr };
 use codec::MailEncoder;
 use quoted_printable::encode;
+use char_validators::MailType;
 
-pub fn q_encode( input: &str , encoder: &mut MailEncoder ) {
+pub fn q_encode_for_encoded_word(encoder: &mut MailEncoder, ctx: MailType, input: &str ) {
     //TODO I suspect the `quoted_printable` crate is not
     // completely correct wrt. to some aspects, have to
     // check this

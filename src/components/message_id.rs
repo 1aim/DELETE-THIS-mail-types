@@ -22,6 +22,7 @@ impl MailEncodable for MessageID {
 }
 
 
+//TODO use vec1
 pub struct MessageIDList( Vec<MessageID> );
 
 impl MessageIDList {

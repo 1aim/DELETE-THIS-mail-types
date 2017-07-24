@@ -289,6 +289,9 @@ provide a gnneral way for encoding header parameter which follow the scheme:
 `<mainvalue> *(";" <key>"="<value> )` this are ContentType and ContentDisposition
  for now
 
+
+IF Item::Encoded only appears as encoded word, make it Item::Encoded word,
+possible checking for "more" validity then noew
 # Dependencies
 
 quoted_printable and base64 have some problems:

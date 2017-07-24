@@ -29,6 +29,7 @@ pub mod mail_composition;
 pub mod codec;
 pub mod headers;
 pub mod components;
+pub mod char_validators;
 
 pub mod types;
 mod utils;

@@ -1,5 +1,5 @@
 
-pub mod shared;
+pub mod utils;
 
 pub mod components;
 
@@ -15,6 +15,11 @@ pub use self::unstructured::Unstructured;
 mod message_id;
 pub use self::message_id::{ MessageID, MessageIDList };
 
+mod phrase;
+pub use self::phrase::{ Phrase, Word };
+
+mod cfws;
+pub use self::cfws::CFWS;
 
 mod header_name;
 pub use self::header_name::HeaderName;
