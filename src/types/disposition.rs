@@ -7,7 +7,7 @@ use ascii::{ AsciiChar, AsciiStr };
 //this will be moved to some where where the import of it is ok
 use super::components::behaviour::utils::is_token_char;
 
-use utils::FileMeta;
+use util_types::FileMeta;
 use error::*;
 use codec::{ MailEncodable, MailEncoder };
 

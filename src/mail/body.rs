@@ -1,11 +1,9 @@
 
 
-use mime::Mime;
 use futures::future::BoxFuture;
 
+use util_types::Buffer;
 use codec::transfer_encoding::TransferEncodedBuffer;
-use utils::{ Buffer, MimeBitDomain };
-use types::TransferEncoding;
 
 pub type FutureBuf = BoxFuture<Item=TransferEncodedBuffer, Error=Error>;
 

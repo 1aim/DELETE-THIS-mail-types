@@ -4,7 +4,7 @@ use ascii::AsciiStr;
 use error::*;
 use codec::{ MailEncoder, MailEncodable };
 
-pub use utils::DateTime;
+pub use util_types::DateTime;
 
 impl MailEncodable for DateTime {
     fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
