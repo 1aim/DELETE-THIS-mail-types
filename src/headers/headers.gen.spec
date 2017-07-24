@@ -33,7 +33,8 @@ RFC   | Name                      | Rust-Type         | Comment
       | Content-Description       | Text              | is Text the same as unstructured ? older
       |                           |                   | RFC has text instead of unstructured?
 ------|---------------------------|-------------------|---------------------------
-
+2183  | Content-Disposition       | Disposition       | proposed standard (obsoltets rfc 1806)
+------|---------------------------|-------------------|---------------------------
 
 
 
