@@ -273,6 +273,21 @@ therefore:
 5. note that >add*< is not modifying Mail, but adds it to the list of headers to encode
 
 
+warn when encoding a Disposition of kind Attachment which's
+file_meta has no name set 
+
+
+// From RFC 2183:
+// NOTE ON PARAMETER VALUE LENGHTS: A short (length <= 78 characters)
+// parameter value containing only non-`tspecials' characters SHOULD be
+// represented as a single `token'.  A short parameter value containing
+// only ASCII characters, but including `tspecials' characters, SHOULD
+// be represented as `quoted-string'.  Parameter values longer than 78
+// characters, or which contain non-ASCII characters, MUST be encoded as
+// specified in [RFC 2184].
+provide a gnneral way for encoding header parameter which follow the scheme: 
+`<mainvalue> *(";" <key>"="<value> )` this are ContentType and ContentDisposition
+ for now
 
 # Dependencies
 
