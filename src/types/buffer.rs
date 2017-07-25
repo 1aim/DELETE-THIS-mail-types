@@ -9,21 +9,21 @@ use super::FileMeta;
 // but when <encodings> is used to support
 // non-utf8/non-ascii encodings this will
 // have more fields, like e.g. `encoding: EncodingSpec`
-pub struct Buffer {
+pub struct FileBuffer {
     content_type: Mime,
     data: Vec<u8>,
     file_meta: FileMeta
 }
 
 
-impl Buffer {
+impl FileBuffer {
 
-    pub fn new( content_type: Mime, data: Vec<u8> ) -> Buffer {
-        Buffer::new_with_file_meta( content_type, data, Default::default() )
+    pub fn new( content_type: Mime, data: Vec<u8> ) -> FileBuffer {
+        FileBuffer::new_with_file_meta( content_type, data, Default::default() )
     }
 
-    pub fn new_with_file_meta( content_type: Mime, data: Vec<u8>, file_meta: FileMeta ) -> Buffer {
-        Buffer { content_type, data, file_meta }
+    pub fn new_with_file_meta( content_type: Mime, data: Vec<u8>, file_meta: FileMeta ) -> FileBuffer {
+        FileBuffer { content_type, data, file_meta }
     }
 
     pub fn with_data<FN>( self, modif: FN ) -> Self
@@ -59,14 +59,14 @@ impl Buffer {
 
 }
 
-impl Deref for Buffer {
+impl Deref for FileBuffer {
     type Target = [u8];
     fn deref( &self ) -> &[u8] {
         *self.data
     }
 }
 
-impl Into< Vec<u8> > for Buffer {
+impl Into< Vec<u8> > for FileBuffer {
     fn into(self) -> Vec<u8> {
         self.data
     }

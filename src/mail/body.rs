@@ -2,10 +2,10 @@
 
 use futures::future::BoxFuture;
 
-use util_types::Buffer;
-use codec::transfer_encoding::TransferEncodedBuffer;
+use util_types::FileBuffer;
+use codec::transfer_encoding::TransferEncodedFileBuffer;
 
-pub type FutureBuf = BoxFuture<Item=TransferEncodedBuffer, Error=Error>;
+pub type FutureBuf = BoxFuture<Item=TransferEncodedFileBuffer, Error=Error>;
 
 #[derive(Debug)]
 pub struct Body {
@@ -15,9 +15,9 @@ pub struct Body {
 enum InnerBody {
     /// a futures resolving to a buffer
     Future(FutureBuf),
-    /// store the value the BufferFuture resolved to
-    Value(TransferEncodedBuffer),
-    /// if the BufferFuture failed, we don't have anything
+    /// store the value the FileBufferFuture resolved to
+    Value(TransferEncodedFileBuffer),
+    /// if the FileBufferFuture failed, we don't have anything
     /// to store, but have not jet dropped the mail it is
     /// contained within, so we still need a value for InnerBody
     ///
@@ -39,7 +39,7 @@ impl Body {
     }
 
     /// creates a new body based on a already transfer-encoded buffer
-    pub fn new_resolved( data: TransferEncodedBuffer ) -> Body {
+    pub fn new_resolved( data: TransferEncodedFileBuffer ) -> Body {
         Body {
             body: InnerBody::Value( data )
         }
@@ -50,7 +50,7 @@ impl Body {
     /// i.e. the Futures was resolved _and_ the body
     /// is aware of it
     ///
-    pub fn buffer_ref( &self ) -> Option<&Buffer> {
+    pub fn buffer_ref( &self ) -> Option<&FileBuffer> {
         use self::InnerBody::*;
         match self.body {
             Value( ref value ) => Some( value ),
@@ -72,7 +72,7 @@ impl Body {
     /// - Err(),*    if the future resolves to an Error, the contained future
     ///              will be removed, `chain_err` will be used to include
     ///              the error in the error_chain
-    pub fn poll_body( &mut self ) -> Result<Option<&Buffer>> {
+    pub fn poll_body( &mut self ) -> Result<Option<&FileBuffer>> {
         use self::InnerBody::*;
         let mut new_body = None;
         match self.body {
@@ -112,8 +112,8 @@ impl From<FutureBuf> for Body {
     }
 }
 
-impl From<TransferEncodedBuffer> for Body {
-    fn from(data: TransferEncodedBuffer) -> Self {
+impl From<TransferEncodedFileBuffer> for Body {
+    fn from(data: TransferEncodedFileBuffer) -> Self {
         Self::new_resolved( data )
     }
 }

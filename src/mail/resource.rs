@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use mime::Mime;
 use futures::future::BoxFuture;
 
-use utils::Buffer;
+use utils::FileBuffer;
 use error::Error;
 
 use super::mime::SinglepartMime;
@@ -17,6 +17,6 @@ pub enum Resource {
         path: PathBuf,
         alternate_name: Option<String>
     },
-    Buffer( Buffer ),
-    Future( BoxFuture<Item=Buffer, Error=Error> )
+    FileBuffer( FileBuffer ),
+    Future( BoxFuture<Item=FileBuffer, Error=Error> )
 }

@@ -10,7 +10,7 @@ use std::sync::Mutex;
 use futures::{ future, Future };
 
 use error::*;
-use utils::{ Buffer, BufferFuture };
+use utils::{ FileBuffer, FileBufferFuture };
 use types::TransferEncoding;
 
 
@@ -32,8 +32,8 @@ lazy_static! {
 
 
 //WHEN_FEATURE(check_multipart_boundaries)
-// change it to fn(Buffer, Boundary) -> Result<Buffer>
-pub type TransferEncoder = fn(Buffer) -> BufferFuture;
+// change it to fn(FileBuffer, Boundary) -> Result<FileBuffer>
+pub type TransferEncoder = fn(FileBuffer) -> FileBufferFuture;
 
 pub struct EncoderStore {
     encoders: Map<TransferEncoding, EncodeStreamFn>,
@@ -67,15 +67,15 @@ impl EncoderStore {
 }
 
 
-pub struct TransferEncodedBuffer {
-    inner: Buffer,
+pub struct TransferEncodedFileBuffer {
+    inner: FileBuffer,
     encoding: TransferEncoding
 }
 
-impl TransferEncodedBuffer {
-    fn buffer_is_encoded( buf: Buffer, with_encoding: TransferEncoding ) -> Self {
-        TransferEncodedBuffer {
-            inner: Buffer,
+impl TransferEncodedFileBuffer {
+    fn buffer_is_encoded( buf: FileBuffer, with_encoding: TransferEncoding ) -> Self {
+        TransferEncodedFileBuffer {
+            inner: FileBuffer,
             encoding: TransferEncoding
         }
     }
@@ -84,16 +84,16 @@ impl TransferEncodedBuffer {
         &self.encoding
     }
 
-    /// transforms a unencoded Buffer into a TransferEncodedBuffer
+    /// transforms a unencoded FileBuffer into a TransferEncodedFileBuffer
     ///
     /// if a preferred_encoder is given it is used,
     /// else if the buffer has a ascii charset 7Bit encoding is used
     /// else if the buffer contains text quoted-printable is used
     /// else base64 encoding is used
     fn encode_buffer(
-        buffer: Buffer,
+        buffer: FileBuffer,
         preferred_encoder: Option<TransferEncoder>
-    ) -> Result<TransferEncodedBuffer>
+    ) -> Result<TransferEncodedFileBuffer>
     {
         let func = if let Some( func ) = preferred_encoder {
             func
@@ -118,16 +118,16 @@ impl TransferEncodedBuffer {
 
 
 
-impl Deref for TransferEncodedBuffer {
-    type Target = Buffer;
-    fn deref( &self ) -> &Buffer {
+impl Deref for TransferEncodedFileBuffer {
+    type Target = FileBuffer;
+    fn deref( &self ) -> &FileBuffer {
         &self.data
     }
 }
 
 
 
-fn encode_7bit( mut buffer: Buffer ) -> Result<TransferEncodedBuffer> {
+fn encode_7bit( mut buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
     let data: &[u8] = &*buffer;
 
     let mut last = b'\0';
@@ -141,10 +141,10 @@ fn encode_7bit( mut buffer: Buffer ) -> Result<TransferEncodedBuffer> {
         last = byte;
     }
 
-    Ok( TransferEncodedBuffer::buffer_is_encoded( buffer, TransferEncoding::_7Bit ) )
+    Ok( TransferEncodedFileBuffer::buffer_is_encoded( buffer, TransferEncoding::_7Bit ) )
 }
 
-fn encode_8bit( mut buffer: Buffer ) -> Result<TransferEncodedBuffer> {
+fn encode_8bit( mut buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
     let data: &[u8] = &*buffer;
 
     let mut last = b'\0';
@@ -158,7 +158,7 @@ fn encode_8bit( mut buffer: Buffer ) -> Result<TransferEncodedBuffer> {
         last = byte;
     }
 
-    Ok( TransferEncodedBuffer::buffer_is_encoded( buffer, TransferEncoding::_8Bit ) )
+    Ok( TransferEncodedFileBuffer::buffer_is_encoded( buffer, TransferEncoding::_8Bit ) )
 }
 
 /// to quote RFC 2045:
@@ -168,19 +168,19 @@ fn encode_8bit( mut buffer: Buffer ) -> Result<TransferEncodedBuffer> {
 ///
 /// nevertheless there is at last one SMTP extension which allows this
 /// (chunked),but this library does not support it for now
-fn encode_binary( mut buffer: Buffer ) -> Result<TransferEncodedBuffer> {
-    Ok( TransferEncodedBuffer::buffer_is_encoded( buffer, TransferEncoding::Binary ) )
+fn encode_binary( mut buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
+    Ok( TransferEncodedFileBuffer::buffer_is_encoded( buffer, TransferEncoding::Binary ) )
 }
 
-fn encode_quoted_printable( buffer: Buffer ) -> Result<TransferEncodedBuffer> {
-    Ok( TransferEncodedBuffer::buffer_is_encoded(
+fn encode_quoted_printable( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
+    Ok( TransferEncodedFileBuffer::buffer_is_encoded(
         buffer.with_data( |data| quoted_printable::encode( &*data ) ),
         TransferEncoding::QuotedPrintable
     ) )
 }
 
-fn encode_base64( buffer: Buffer ) -> Result<TransferEncodedBuffer> {
-    Ok( TransferEncodedBuffer::buffer_is_encoded(
+fn encode_base64( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
+    Ok( TransferEncodedFileBuffer::buffer_is_encoded(
         buffer.with_data( |data| base64::encode_config( &*data, base64::MIME ).into_bytes() ),
         TransferEncoding::Base64
     ) )

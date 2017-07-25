@@ -13,7 +13,7 @@ use codec::transfer_encoding::TRANSFER_ENCODINGS;
 use types::TransferEncoding;
 use headers::Header;
 use error::*;
-use utils::{ BufferFuture, Buffer };
+use utils::{ FileBufferFuture, FileBuffer };
 
 use self::body::Body;
 pub use self::builder::*;

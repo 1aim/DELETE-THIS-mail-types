@@ -41,8 +41,8 @@ use futures::future::{ self,  BoxFuture };
 use error::*;
 use types::TransferEncoding;
 use headers::Header;
-use codec::transfer_encoding::TransferEncodedBuffer;
-use utils::Buffer;
+use codec::transfer_encoding::TransferEncodedFileBuffer;
+use utils::FileBuffer;
 
 use super::mime::MultipartMime;
 use super::resource::Resource;
@@ -198,15 +198,15 @@ impl<E: BuilderContext> SinglepartBuilder<E> {
         use self::Resource::*;
 
         let body: Body = match self.body {
-            Buffer( buffer ) => {
+            FileBuffer( buffer ) => {
                 self.inner.ctx.execute_fn(
-                    move || TransferEncodedBuffer::encode_buffer( buffer, None )
+                    move || TransferEncodedFileBuffer::encode_buffer( buffer, None )
                 )
             },
             Future( future ) => {
                 future.and_then( |buffer|
                     self.inner.ctx.execute_fn(
-                        move || TransferEncodedBuffer::encode_buffer( buffer, None )
+                        move || TransferEncodedFileBuffer::encode_buffer( buffer, None )
                     )
                 ).into()
             },
@@ -214,8 +214,8 @@ impl<E: BuilderContext> SinglepartBuilder<E> {
                 self.inner.ctx.execute(
                     self.inner.e.load_file( path ).map( |data| {
                         //TODO add file meta, replacing name with alternate_name (if it is some)
-                        let buffer = Buffer::new( mime, data );
-                        TransferEncodedBuffer::encode_buffer( buffer, None )
+                        let buffer = FileBuffer::new( mime, data );
+                        TransferEncodedFileBuffer::encode_buffer( buffer, None )
                     })
                 ).into()
             }

@@ -5,7 +5,7 @@ use futures::future::BoxFuture;
 use ascii::AsciiChar;
 
 use error::*;
-use utils::Buffer;
+use utils::FileBuffer;
 use raw_mail::resource::Resource;
 
 pub type Embeddings = Vec<EmbeddingInMail>;
