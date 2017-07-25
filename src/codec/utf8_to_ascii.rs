@@ -3,7 +3,7 @@ use codec::MailEncoder;
 use quoted_printable::encode;
 use char_validators::MailType;
 
-pub fn q_encode_for_encoded_word<E>(encoder: &mut E, ctx: MailType, input: &str )
+pub fn q_encode_for_encoded_word<E>( encoder: &mut E, ctx: MailType, input: &str )
     where E: MailEncoder
 {
     //TODO I suspect the `quoted_printable` crate is not
@@ -15,11 +15,11 @@ pub fn q_encode_for_encoded_word<E>(encoder: &mut E, ctx: MailType, input: &str 
     encoder.write_str( &*asciied )
 }
 
-pub fn puny_code_domain<E>(_input: &str, _encoder: &mut E)
+pub fn puny_code_domain<E>( input: &str, encoder: &mut E )
     where E: MailEncoder
 {
-    if let Ok( val ) = _input.as_ascii_str() {
-        _encoder.write_str( val )
+    if let Ok( val ) = input.as_ascii_str() {
+        encoder.write_str( val )
     } else {
         unimplemented!();
     }
