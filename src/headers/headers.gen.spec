@@ -4,7 +4,8 @@
 
 RFC   | Name                      | Rust-Type         | Comment
 ------|---------------------------|-------------------|----------------------------
-5322  | Date                      | DateTime          |
+5322  |                           |                   |    RFC 5322 obsoletes RFC 822
+      | Date                      | DateTime          |
       | From                      | AddressList       |
       | Sender                    | Mailbox           |
       | Reply-To                  | MailboxList       |
@@ -30,10 +31,12 @@ RFC   | Name                      | Rust-Type         | Comment
 2045  | Content-Type              | Mime              |
       | Content-ID                | MessageID         |
       | Content-Transfer-Encoding | TransferEncoding  |
-      | Content-Description       | Text              | is Text the same as unstructured ? older
-      |                           |                   | RFC has text instead of unstructured?
+      | Content-Description       | Unstructured      | the rfc states it is TEXT, but referes to RFC822
+      |                           |                   | in RFC5322 there is no longer TEXT, it was replaced
+      |                           |                   | by Unstructured
 ------|---------------------------|-------------------|---------------------------
-2183  | Content-Disposition       | Disposition       | proposed standard (obsoltets rfc 1806)
+2183  |                           |                   | proposed standard (obsoltets rfc 1806)
+      | Content-Disposition       | Disposition       |
 ------|---------------------------|-------------------|---------------------------
 
 

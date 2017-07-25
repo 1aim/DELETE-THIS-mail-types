@@ -41,8 +41,6 @@ pub use self::path::Path;
 mod received_token;
 pub use self::received_token::ReceivedToken;
 
-mod text;
-pub use self::text::Text;
 
 mod transfer_encoding;
 pub use self::transfer_encoding::TransferEncoding;
