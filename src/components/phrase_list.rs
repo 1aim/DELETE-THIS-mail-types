@@ -4,22 +4,19 @@ use ascii::AsciiChar;
 
 use error::*;
 use codec::{MailEncoderImpl, MailEncodable };
-use super::shared::Item;
-use super::components::data_types::Phrase;
-use super::components::behaviour::encode::EncodeComponent;
+
+use super::Phrase;
+
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct PhraseList {
-    inner: Item,
-    component_slices: Vec<Phrase>
-}
+pub struct PhraseList(pub Vec1<Phrase>);
+
 
 impl MailEncodable for PhraseList {
-    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
-        if self.component_slices.len() == 0 {
-            return Err( ErrorKind::AtLastOneElementIsRequired.into() );
-        }
-        sep_for!{ phrase in self.component_slices.iter();
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()>
+        where E: MailEncoder
+    {
+        sep_for!{ phrase in self.0.iter();
             sep { encoder.write_char( AsciiChar::Comma ) };
 
             phrase.encode( &self.inner, encoder )?;
