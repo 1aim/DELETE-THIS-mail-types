@@ -3,7 +3,7 @@ use ascii::AsciiStr;
 
 use error::*;
 use components::shared::Item;
-use codec::{MailDecodable, MailEncodable, MailEncoder};
+use codec::{ MailEncodable, MailEncoder };
 
 
 use components::components::data_types;
@@ -43,24 +43,20 @@ impl Address {
 
 impl MailEncodable for Address {
 
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>(&self, encoder: &mut E) -> Result<()>
+        where E: MailEncoder
+    {
         self.component_slices.encode( &self.inner, encoder )
     }
 }
 
-impl MailDecodable for Address {
-
-    fn decode( _src: &str ) -> Result<Self> {
-        unimplemented!();
-    }
-}
 
 
 
 impl fmt::Debug for Address {
     //use encode and convert to String
     fn fmt( &self, f: &mut fmt::Formatter ) -> fmt::Result {
-        let mut encoder = MailEncoder::new( true );
+        let mut encoder = MailEncoderImpl::new( true );
         if let Err(_) = self.encode( &mut encoder ) {
             //FIXME warn!
             return Err( fmt::Error )
@@ -80,7 +76,7 @@ mod test {
     use ascii::AsAsciiStr;
 
     use super::super::components::{ data_types as address };
-    use codec::{ MailDecodable, MailEncodable, MailEncoder };
+    use codec::{MailDecodable, MailEncodable, MailEncoderImpl};
     use super::Address;
 
     macro_rules! check_addr {

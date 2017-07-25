@@ -9,7 +9,7 @@ use super::components::behaviour::utils::is_token_char;
 
 use util_types::FileMeta;
 use error::*;
-use codec::{ MailEncodable, MailEncoder };
+use codec::{MailEncodable, MailEncoderImpl};
 
 
 
@@ -93,7 +93,7 @@ macro_rules! encode_disposition_param {
 //  which follow the scheme: <mainvalue> *(";" <key>"="<value> )
 //  this are: ContentType and ContentDisposition for now
 impl MailEncodable for DispositionParameters {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         encode_disposition_param! {
             STR f i l e n a m e | self.file_name;
             DATE c r e a t i o n Minus d a t e | self.creation_date;
@@ -106,7 +106,7 @@ impl MailEncodable for DispositionParameters {
 }
 
 
-fn encode_file_name( file_name: &AsciiStr, encoder: &mut MailEncoder) -> Result<()> {
+fn encode_file_name(file_name: &AsciiStr, encoder: &mut MailEncoderImpl) -> Result<()> {
     for char in file_name {
         if !is_token_char( char ) {
             bail!(

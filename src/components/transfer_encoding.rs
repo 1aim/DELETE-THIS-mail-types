@@ -4,7 +4,7 @@ use ascii::{ AsciiString, AsciiStr };
 
 use std::ops::Deref;
 use error::*;
-use codec::{ MailEncoder, MailEncodable };
+use codec::{MailEncoderImpl, MailEncodable };
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum TransferEncoding {
@@ -35,7 +35,7 @@ impl TransferEncoding {
 }
 
 impl MailEncodable for TransferEncoding {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         encoder.write_str( self.name() );
         Ok( () )
     }

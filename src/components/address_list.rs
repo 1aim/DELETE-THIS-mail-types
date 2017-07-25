@@ -2,7 +2,7 @@ use std::ops::{ Deref, DerefMut };
 
 use error::*;
 use ascii::AsciiChar;
-use codec::{ MailEncoder, MailDecodable, MailEncodable };
+use codec::{MailEncoderImpl, MailDecodable, MailEncodable };
 
 use super::address::Address;
 
@@ -63,7 +63,7 @@ impl Deref for AddressList {
 
 
 impl MailEncodable for OptAddressList {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         sep_for!{ address in self.0.iter();
             sep {
                 encoder.write_char( AsciiChar::Comma );
@@ -76,16 +76,11 @@ impl MailEncodable for OptAddressList {
 }
 
 impl MailEncodable for AddressList {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         self.0.encode( encoder )
     }
 }
 
-impl MailDecodable for AddressList {
-    fn decode( data: &str ) -> Result<Self> {
-        unimplemented!();
-    }
-}
 
 #[cfg(test)]
 mod test {

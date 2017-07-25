@@ -1,6 +1,6 @@
 use error::*;
 use types::Vec1;
-use codec::{ MailEncodable, MailEncoder };
+use codec::{MailEncodable, MailEncoderImpl};
 use ascii::AsciiStr;
 
 use super::utils::item::{ Input, Item };
@@ -97,7 +97,7 @@ impl Phrase {
 
 pub fn mail_encode_word(
     word: &Word,
-    encoder: &mut MailEncoder,
+    encoder: &mut MailEncoderImpl,
     ctx: EncodedWordContext
 ) -> Result<()> {
 
@@ -138,7 +138,7 @@ impl MailEncodable for Phrase  {
 
     //FEATURE_TODO(warn_on_bad_phrase): warn if the phrase contains chars it should not
     //  but can contain due to encoding, e.g. ascii CTL's
-    fn encode(&self, encoder: &mut MailEncoder) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         use self::Phrase::*;
 
         match *self {

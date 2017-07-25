@@ -4,18 +4,18 @@ use std::char;
 use ::ascii::{ AsciiChar, AsAsciiStr };
 
 use error::*;
-use codec::MailEncoder;
+use codec::MailEncoderImpl;
 use codec::utf8_to_ascii::puny_code_domain;
 use components::components::data_types::*;
 use components::shared::Item;
 
 pub trait EncodeComponent {
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()>;
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()>;
 }
 
 impl EncodeComponent for Domain {
     //FIXME currently does not support domain literal form
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()> {
         let data = self.apply_on( matching_data );
         encoder.note_optional_fws();
         puny_code_domain( data, encoder );
@@ -25,7 +25,7 @@ impl EncodeComponent for Domain {
 }
 
 impl EncodeComponent for LocalPart {
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()> {
         let data = self.apply_on( matching_data );
         encoder.note_optional_fws();
         encoder.try_write_8bit_data( data.as_bytes() )
@@ -36,7 +36,7 @@ impl EncodeComponent for LocalPart {
 }
 
 impl EncodeComponent for Email {
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()> {
         self.local.encode( matching_data, encoder )?;
         encoder.write_char( AsciiChar::At );
         self.domain.encode( matching_data, encoder )?;
@@ -45,7 +45,7 @@ impl EncodeComponent for Email {
 }
 
 impl EncodeComponent for Phrase {
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()> {
         sep_for!{ word in self.0.iter();
             sep { encoder.write_fws() };
 
@@ -56,7 +56,7 @@ impl EncodeComponent for Phrase {
 }
 
 impl EncodeComponent for Word {
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()> {
         let data = self.0.apply_on( matching_data );
         encoder.note_optional_fws();
         if data.starts_with( "\"" ) {
@@ -78,7 +78,7 @@ impl EncodeComponent for Word {
 }
 
 impl EncodeComponent for Address {
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()> {
         if let Some( display_name ) = self.display_name.as_ref() {
             display_name.encode( matching_data, encoder )?;
 
@@ -97,7 +97,7 @@ impl EncodeComponent for Address {
 
 
 impl EncodeComponent for Unstructured {
-    fn encode( &self, matching_data: &Item, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode(&self, matching_data: &Item, encoder: &mut MailEncoderImpl) -> Result<()> {
         //Note: the rfc 2047 does not directly state all use-cases of "unstructured" can be encoded
         // with encoded word's, but it list practically all cases unstructured can appear in
         let data = self.0.apply_on( matching_data );
@@ -158,7 +158,7 @@ mod test {
         fn utf8_fail() {
             let data = Item::from( "utäf8" );
             let local_part = LocalPart(  0..data.len() );
-            let mut encoder = MailEncoder::new( false );
+            let mut encoder = MailEncoderImpl::new( false );
 
             let res = local_part.encode( &data, &mut encoder );
 
@@ -206,7 +206,7 @@ mod test {
                 local: LocalPart( 0..2 ),
                 domain: Domain( 3..6 )
             };
-            let mut encoder = MailEncoder::new( false );
+            let mut encoder = MailEncoderImpl::new( false );
 
             email.encode( &data, &mut encoder ).expect( "encoding failed" );
 
@@ -223,7 +223,7 @@ mod test {
         fn mixed() {
             let data = Item::from( "Hy|ä|moin" );
             let display_name = Phrase( vec![ Word( 0..2 ), Word( 3..5 ), Word( 6..10 ) ] );
-            let mut encoder = MailEncoder::new( true );
+            let mut encoder = MailEncoderImpl::new( true );
 
             display_name.encode( &data, &mut encoder ).expect( "encoding failed" );
 
@@ -246,7 +246,7 @@ mod test {
                     domain: Domain( 3..6 ),
                 }
             };
-            let mut encoder = MailEncoder::new( false );
+            let mut encoder = MailEncoderImpl::new( false );
 
             address.encode( &data, &mut encoder ).expect( "encoding failed" );
 
@@ -265,7 +265,7 @@ mod test {
                 }
             };
 
-            let mut encoder = MailEncoder::new( false );
+            let mut encoder = MailEncoderImpl::new( false );
 
             address.encode( &data, &mut encoder ).expect( "encoding failed" );
 

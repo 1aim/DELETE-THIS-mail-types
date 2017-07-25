@@ -1,7 +1,7 @@
 use ascii::AsciiChar;
 
 use error::*;
-use codec::{ MailEncoder, MailEncodable };
+use codec::{MailEncoderImpl, MailEncodable };
 use components::shared::Item;
 use components::components::data_types::Email;
 use components::components::behaviour::encode::EncodeComponent;
@@ -13,7 +13,7 @@ pub struct MessageID {
 }
 
 impl MailEncodable for MessageID {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         encoder.write_char( AsciiChar::LessThan );
         self.component_slices.encode( &self.inner, encoder )?;
         encoder.write_char( AsciiChar::GreaterThan );
@@ -46,7 +46,7 @@ impl MessageIDList {
 }
 
 impl MailEncodable for MessageIDList {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         for msg_id in self.0.iter() {
             msg_id.encode( encoder );
         }

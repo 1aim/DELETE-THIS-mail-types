@@ -1,4 +1,4 @@
-use codec::{ MailEncoder, MailEncodable };
+use codec::{MailEncoderImpl, MailEncodable };
 
 use error::*;
 use super::shared::Item;
@@ -19,7 +19,7 @@ pub struct ReceivedToken {
 }
 
 impl MailEncodable for ReceivedToken {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         use self::Variant::*;
         match self.component_slices {
             Word( ref word ) => word.encode( &self.inner, encoder ),

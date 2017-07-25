@@ -2,7 +2,7 @@ use std::ops::Deref;
 
 use ascii::{ AsciiString, AsciiStr, AsciiChar };
 
-use codec::{ MailEncodable, MailEncoder };
+use codec::{MailEncodable, MailEncoderImpl};
 use error::*;
 // we need this for the `Other` and `ContentTypeExtension`
 // cases when they are used for generating mails
@@ -34,7 +34,7 @@ impl HeaderName {
 
 
 impl MailEncodable for HeaderName {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         encoder.write_str( &*self.0 );
         encoder.write_char( AsciiChar::Colon );
         Ok( () )

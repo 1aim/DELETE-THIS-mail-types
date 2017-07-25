@@ -1,5 +1,5 @@
 use error::*;
-use codec::{ MailEncoder, MailEncodable };
+use codec::{MailEncoderImpl, MailEncodable };
 
 //FEATURE_TODO(fws_controll): allow controlling the amount of WS and if a CRLF should be used in FWS
 //  this is also usefull for parsing and keeping information about FWS structure
@@ -27,7 +27,9 @@ pub enum CFWS {
 
 impl MailEncodable for CFWS {
 
-    fn encode( &self, encoder:  &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()>
+        where E: MailEncoderImpl
+    {
         match self {
             CFWS::SingleFws(ref FWS ) => {
                 encoder.write_fws()

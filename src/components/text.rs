@@ -3,7 +3,7 @@ use std::ops::Range;
 use ascii::AsAsciiStr;
 
 use error::*;
-use codec::{ MailEncoder, MailEncodable };
+use codec::{MailEncoderImpl, MailEncodable };
 use super::shared::Item;
 use super::components::data_types::{View, Email};
 use super::components::behaviour::encode::EncodeComponent;
@@ -18,7 +18,7 @@ pub struct Text {
 
 
 impl MailEncodable for Text {
-    fn encode( &self, encoder: &mut MailEncoder ) -> Result<()> {
+    fn encode<E>( &self, encoder:  &mut E ) -> Result<()> where E: MailEncoder {
         let text = self.component_slices.apply_on( &self.inner );
         if let Ok( as_ascii ) = text.as_ascii_str() {
             encoder.write_str( as_ascii );
