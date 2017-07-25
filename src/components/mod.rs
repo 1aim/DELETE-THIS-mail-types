@@ -20,8 +20,7 @@ pub use self::unstructured::Unstructured;
 mod message_id;
 pub use self::message_id::{ MessageID, MessageIDList };
 
-mod phrase;
-pub use self::phrase::{ Phrase, Word };
+
 
 mod cfws;
 pub use self::cfws::CFWS;
@@ -39,11 +38,17 @@ mod path;
 pub use self::path::Path;
 
 mod received_token;
-pub use self::received_token::ReceivedToken;
+pub use self::received_token::{ ReceivedToken, ResceivedTokenWord };
 
 
 mod transfer_encoding;
 pub use self::transfer_encoding::TransferEncoding;
+
+pub mod word;
+pub use self::word::Word;
+
+mod phrase;
+pub use self::phrase::{ Phrase, PhraseWord };
 
 mod phrase_list;
 pub use self::phrase_list::PhraseList;
