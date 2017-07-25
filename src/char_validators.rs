@@ -7,6 +7,15 @@ pub enum MailType {
     Internationalized
 }
 
+impl MailType {
+    fn supports_utf8( &self ) -> bool {
+        use self::MailType::*;
+        match *self {
+            Ascii => false,
+            Internationalized => true
+        }
+    }
+}
 ///WS as defined by RFC 5234
 #[inline(always)]
 pub fn is_ws( ch: char ) -> bool {
@@ -102,8 +111,11 @@ pub fn is_atext( ch: char, tp: MailType  ) -> bool {
 //qtext as defined by RFC 5322
 pub fn is_qtext( ch: char, tp: MailType ) -> bool {
     match ch {
+        //not ' ' [d:32]
         '!' |
+        //not '"' [d:34]
         '#'...'[' |
+        //not '\\' [d:92]
         ']'...'~' => true,
         //obs-qtext
         _ => match tp {

@@ -29,23 +29,23 @@ pub enum Phrase {
 }
 
 impl Word {
-    pub fn check_item_validity(item: Item) -> Result<()> {
-        match item {
-            Item::Ascii( ascii ) => {
+    pub fn check_item_validity(item: &Item) -> Result<()> {
+        match *item {
+            Item::Ascii( ref ascii ) => {
                 for ch in ascii.chars() {
                     if !is_atext( ch, MailType::Ascii ) {
                         bail!( "invalid atext (ascii) char: {}", ch );
                     }
                 }
             },
-            Item::Encoded( encoded ) => {
+            Item::Encoded( ref encoded ) => {
                 let as_str = encoded.as_str();
                 if !( is_encoded_word( as_str, EncodedWordContext::Phrase ) ||
                       is_quoted_word( as_str ){
                     bail!( "encoded item in context of phrase/word must be a encoded word" )
                 }
             },
-            Item::Utf8( international ) => {
+            Item::Utf8( ref international ) => {
                 for ch in international.chars() {
                     if !is_atext( ch, MailType::Internationalized) {
                         bail!( "invalide atext (internationalized) char: {}", ch );
@@ -58,7 +58,7 @@ impl Word {
     }
 
     pub fn new(item: InnerAsciiItem) -> Result<Self> {
-        Self::check_item_validity( item )?;
+        Self::check_item_validity( &item )?;
         Ok( Word( None, item, None ) )
     }
 
@@ -68,7 +68,7 @@ impl Word {
         right_padding: Option<CFWS>
     ) -> Result<Self> {
 
-        Self::check_item_validity( item )?;
+        Self::check_item_validity( &item )?;
         Ok( Word( left_padding, item, right_padding ) )
     }
 
@@ -147,6 +147,7 @@ impl MailEncodable for Phrase  {
                     mail_encode_word(word, encoder, EncodedWordContext::Phrase )?;
                 }
             },
+            //TODO handle input not containing a valid phrase (only ws's)
             InputBased( ref input ) => {
                 let mut last_ws = None;
                 let mut scanning_ws_section = true;

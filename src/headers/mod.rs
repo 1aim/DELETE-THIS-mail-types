@@ -4,7 +4,7 @@ use ascii::{ AsciiStr, AsciiChar };
 
 use error::*;
 use types::{
-    Address, OptAddressList, AddressList,
+    Mailbox, OptAddressList, MailboxList,
     MessageID, MessageIDList,
     Unstructured, DateTime,
     Path, ReceivedToken,

@@ -1,9 +1,10 @@
 
 use std::rc::Rc;
 use std::ops::{ Deref, DerefMut };
+use std::result::{ Result as StdResult };
 
 use owning_ref::OwningRef;
-use ascii::AsciiString;
+use ascii::{ AsciiString, FromAsciiError };
 
 //FEATURE_TODO(non_utf8_input): use (Vec<u8>, Encoding) instead of String in Input
 //  but keep String in item, as there non utf8 input is not allowed
@@ -18,6 +19,49 @@ pub enum Input {
     Shared(OwningRef<Rc<String>, str>)
 }
 
+pub enum Item {
+    Ascii( InnerAsciiItem ),
+    Encoded( InnerAsciiItem ),
+    Utf8( InnerUtf8Item ),
+    //Other( InnerOtherItem )
+}
+
+pub enum SimpleItem {
+    /// specifies that the Item is valid Ascii, nothing more
+    Ascii( InnerAsciiItem ),
+    /// specifies that the Item is valid Utf8, nothing more
+    Utf8( InnerUtf8Item )
+}
+
+impl Input {
+
+    pub fn into_ascii_item( self ) -> StdResult<InnerAsciiItem, FromAsciiError<String>> {
+        Ok( match self {
+            Input::Owned( string )
+                => InnerAsciiItem::Owned( AsciiString::from_ascii( string )? ),
+            Input::Shared( shared )
+                => InnerAsciiItem::Owned(
+                    AsciiString::from_ascii( String::from( &*shared ) )? )
+        } )
+    }
+
+    pub unsafe fn into_ascii_item_unchecked( self ) -> InnerAsciiItem {
+        match self {
+            Input::Owned( string )
+                => InnerAsciiItem::Owned( AsciiString::from_ascii_unchecked( string ) ),
+            Input::Shared( shared )
+                => InnerAsciiItem::Owned(
+                    AsciiString::from_ascii_unchecked( String::from( &*shared ) ) )
+        }
+    }
+
+    pub fn into_utf8_item( self ) -> InnerUtf8Item {
+        match self {
+            Input::Owned( string ) => InnerUtf8Item::Owned( string ),
+            Input::Shared( orwf ) => InnerUtf8Item::Shared( orwf )
+        }
+    }
+}
 impl From<String> for Input {
     fn from( s: String ) -> Self {
         Input::Owned( s )
@@ -35,14 +79,6 @@ impl Deref for Input {
         }
     }
 }
-
-pub enum Item {
-    Ascii( InnerAsciiItem ),
-    Encoded( InnerAsciiItem ),
-    Utf8( InnerUtf8Item ),
-    //Other( InnerOtherItem )
-}
-
 
 
 macro_rules! inner_impl {

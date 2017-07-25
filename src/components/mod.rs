@@ -3,11 +3,16 @@ pub mod utils;
 
 pub mod components;
 
-mod address_list;
-pub use self::address_list::{ AddressList, OptAddressList };
+mod email;
+pub use self::email::{ Email, Domain, LocalPart };
 
-mod address;
-pub use self::address::Address;
+mod mailbox;
+pub use self::mailbox::Mailbox;
+
+mod mailbox_list;
+pub use self::mailbox_list::{MailboxList, OptMailboxList };
+
+
 
 mod unstructured;
 pub use self::unstructured::Unstructured;

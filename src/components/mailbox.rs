@@ -1,52 +1,30 @@
 use std::fmt;
-use ascii::AsciiStr;
+use ascii::AsciiChar;
 
 use error::*;
-use components::shared::Item;
 use codec::{ MailEncodable, MailEncoder };
 
+use super::Phrase;
+use super::Email;
 
-use components::components::data_types;
-use components::components::data_types::View;
-use components::components::behaviour::encode::EncodeComponent;
-
-
-pub struct Address {
-    inner: Item,
-    component_slices: data_types::Address,
-    // give the parser some slack for some non valide but nevertheless occurring syntax, this
-    // include thing parsed through `obs-` grammar which can't be converted to valid grammar
-    // e.g. display-name-only/user-name-only style (e.g. `From: admin` )
-    //valid: bool
+pub struct Mailbox {
+    pub display_name: Option<Phrase>,
+    pub email: Email
 }
 
 
-impl Address {
-
-    pub fn display_name( &self ) -> Option<&str> {
-        self.component_slices.display_name.as_ref().map( |dn| {
-            dn.apply_on( &*self.inner )
-        })
-    }
-
-    pub fn user( &self ) -> &str {
-        self.component_slices.email.local.apply_on( &*self.inner )
-    }
-
-    // is required both in actual and obsolete syntax specified in RFC
-    pub fn host( &self ) -> &str {
-        self.component_slices.email.domain.apply_on( &*self.inner )
-    }
-
-
-}
-
-impl MailEncodable for Address {
+impl MailEncodable for Mailbox {
 
     fn encode<E>(&self, encoder: &mut E) -> Result<()>
         where E: MailEncoder
     {
-        self.component_slices.encode( &self.inner, encoder )
+        if let Some( display_name ) = self.display_name.as_ref() {
+            display_name.encode( encoder )?;
+        }
+        //for now this always uses the "<user@do.main>" form even if no display-name is given
+        encoder.write_char( AsciiChar::LessThan );
+        email.encode( encoder )?;
+        encoder.write_char( AsciiChar::GreaterThan );
     }
 }
 

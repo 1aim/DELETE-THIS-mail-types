@@ -25,6 +25,7 @@ pub trait MailEncoder {
     fn write_char( &mut self, char: AsciiChar );
     fn write_str( &mut self, str: &AsciiStr );
 
+    fn try_write_utf8( &mut self, str: &str ) -> Result<()>;
     fn try_write_atext( &mut self, str: &str ) -> Result<()>;
     fn write_encoded_word( &mut self, data: &str, ctx: EncodedWordContext );
 
@@ -139,6 +140,16 @@ impl MailEncoder for MailEncoderImpl {
 
     fn write_str( &mut self, str: &AsciiStr ) {
         self.write_data_unchecked( str.as_bytes() );
+    }
+
+    fn try_write_utf8( &mut self, str: &str ) -> Result<()> {
+        if self.mail_type().supports_utf8() {
+            self.write_data_unchecked( str );
+            Ok( ()  )
+        } else {
+            //NOTE: we could check if &str happens to be ascii
+            bail!( "can not write utf8 into Ascii mail" )
+        }
     }
 
     fn try_write_atext( &mut self, str: &str ) -> Result<()> {

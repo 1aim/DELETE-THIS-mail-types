@@ -6,11 +6,11 @@ RFC   | Name                      | Rust-Type         | Comment
 ------|---------------------------|-------------------|----------------------------
 5322  | Date                      | DateTime          |
       | From                      | AddressList       |
-      | Sender                    | Address           |
-      | Reply-To                  | AddressList       |
-      | To                        | AddressList       |
-      | Cc                        | AddressList       |
-      | Bcc                       | OptAddressList    |
+      | Sender                    | Mailbox           |
+      | Reply-To                  | MailboxList       |
+      | To                        | MailboxList       |
+      | Cc                        | MailboxList       |
+      | Bcc                       | OptMailboxList    |
       | Message-ID                | MessageID         |
       | In-Reply-To               | MessageIDList     |
       | References                | MessageIDList     |
@@ -19,9 +19,9 @@ RFC   | Name                      | Rust-Type         | Comment
       | Keywords                  | PhraseList        |
       | Resent-Date               | DateTime          |
       | Resent-From               | AddressList       |
-      | Resent-Sender             | Address           |
-      | Resent-To                 | AddressList       |
-      | Resent-Cc                 | AddressList       |
+      | Resent-Sender             | Mailbox           |
+      | Resent-To                 | MailboxList       |
+      | Resent-Cc                 | MailboxList       |
       | Resent-Bcc                | OptAddressList    |
       | Resent-Msg-ID             | MessageID         |
       | Return-Path               | Path              |

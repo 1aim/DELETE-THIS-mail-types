@@ -292,6 +292,12 @@ provide a gnneral way for encoding header parameter which follow the scheme:
 
 IF Item::Encoded only appears as encoded word, make it Item::Encoded word,
 possible checking for "more" validity then noew
+
+
+email::quote => do not escape WSP, and use FWS when encoding
+also make quote, generally available for library useers a
+create_quoted_string( .. )
+ 
 # Dependencies
 
 quoted_printable and base64 have some problems:
