@@ -14,44 +14,12 @@ pub mod utf8_to_ascii;
 
 use self::utf8_to_ascii::q_encode_for_encoded_word;
 
-//#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
-//pub enum Bits8State {
-//    Unsupported,
-//    Supported,
-//    Used
-//}
-//
-//impl Bits8State {
-//    pub fn is_supported( &self ) -> bool {
-//        use self::Bits8State::*;
-//        match *self {
-//            Supported | Used => true,
-//            Unsupported => false
-//        }
-//    }
-//    pub fn is_used( &self ) -> bool {
-//        match *self {
-//            Bits8State::Used => true,
-//            _ => false
-//        }
-//    }
-//}
-
-//TODO add a Context + with_context (+ make MailEncoder a trait?)
-//for encoding headers, we:
-//1. have less characters for encoded words
-//2. need smtputf8 for writing any non ASCII data
-//3. but for bodies we only need the 8BITMIME extension
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct MailEncoder {
     inner: Vec<u8>,
     current_line_byte_length: usize,
     last_cfws_pos: Option<usize>,
-    //FIXME change to _8bit_support as this is the thinks which matters
-    //TODO phase out, replace with MailType::{Internationalized OR Ascii}
-    //  we might add a 8BITMIME flag back in later, but not for now
-    //bits8_support: Bits8State,
     mail_type: MailType
 }
 
@@ -122,19 +90,6 @@ impl MailEncoder {
     pub fn write_char( &mut self, char: AsciiChar ) {
         self.write_byte_unchecked( char.as_byte() );
     }
-
-//    pub fn try_write_8bit_data( &mut self, data: &[u8] ) -> Result<()> {
-//        use self::Bits8State::*;
-//        match self.bits8_support {
-//            Unsupported if !is_7bit_data( data ) =>
-//                return Err( ErrorKind::TriedWriting8BitBytesInto7BitData.into() ),
-//            Supported if !is_7bit_data( data ) =>
-//                self.bits8_support = Used,
-//            _ => {}
-//        }
-//        self.write_data_unchecked( data );
-//        Ok( () )
-//    }
 
     fn write_byte_unchecked(&mut self, byte: u8 ) {
         //FIXME: potentially keep track of "line ending state" to prevent rogue '\r' '\n'
