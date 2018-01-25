@@ -8,7 +8,7 @@ use futures::Future;
 use futures_cpupool::{ CpuPool, Builder };
 
 use utils::SendBoxFuture;
-use mail::{ FileLoader, RunElsewhere, CompositeBuilderContext };
+use context::{ FileLoader, RunElsewhere, CompositeBuilderContext };
 use super::VFSFileLoader;
 
 #[derive(Clone)]

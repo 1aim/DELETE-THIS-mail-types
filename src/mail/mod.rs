@@ -17,6 +17,7 @@ use mheaders::{
     Date, MessageId
 };
 use mheaders::components::DateTime;
+use context::BuilderContext;
 
 use self::builder::{
     check_header,
@@ -27,15 +28,15 @@ use self::mime::gen_multipart_mime;
 pub use self::builder::{
     Builder, MultipartBuilder, SinglepartBuilder
 };
-pub use self::context::*;
+
 pub use self::resource::*;
 
 
 pub mod mime;
+pub mod context;
 mod resource;
 mod builder;
 mod encode;
-mod context;
 
 
 

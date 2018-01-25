@@ -19,7 +19,7 @@ use mheaders::components::{MediaType, TransferEncoding};
 
 use utils::{SendBoxFuture, now};
 use file_buffer::{FileBuffer, TransferEncodedFileBuffer};
-use super::BuilderContext;
+use super::context::BuilderContext;
 
 
 /// POD containing the path from which the resource should be loaded as well as mime and name

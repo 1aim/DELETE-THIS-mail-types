@@ -2,12 +2,12 @@ use std::path::Path;
 
 use futures::{Future, future};
 
-use mail_codec::MediaType;
 use mail_codec::file_buffer::FileBuffer;
-use mail_codec::mail::{
+use mail_codec::{
+    MediaType,
     Resource, ResourceSpec, ResourceState,
-    CompositeBuilderContext,
 };
+use mail_codec::context::CompositeBuilderContext;
 use mail_codec::default_impl::{ FSFileLoader, simple_cpu_pool };
 
 macro_rules! context {

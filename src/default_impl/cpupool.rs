@@ -4,7 +4,7 @@ use utils::SendBoxFuture;
 
 use futures_cpupool::{ CpuPool, Builder};
 
-use mail::RunElsewhere;
+use context::RunElsewhere;
 
 pub fn simple_cpu_pool() -> CpuPool {
     Builder::new().create()

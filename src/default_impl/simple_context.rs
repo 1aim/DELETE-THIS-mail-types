@@ -8,7 +8,7 @@ use futures_cpupool::{ CpuPool, Builder };
 
 use core::error::*;
 use utils::SendBoxFuture;
-use mail::{ FileLoader, RunElsewhere, CompositeBuilderContext };
+use context::{ FileLoader, RunElsewhere, CompositeBuilderContext };
 use composition::ContentIdGen;
 use mheaders::components::MessageID;
 
@@ -97,7 +97,7 @@ impl ContentIdGen for SimpleContext {
 
 #[cfg(test)]
 mod test {
-    use mail::BuilderContext;
+    use context::BuilderContext;
     use composition::Context;
 
     use super::SimpleContext;

@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use futures::future;
 
 use core::error::*;
-use mail::FileLoader;
+use context::FileLoader;
 
 #[derive( Debug, Clone, PartialEq, Default )]
 pub struct VFSFileLoader {

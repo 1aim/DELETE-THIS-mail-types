@@ -7,7 +7,7 @@ use futures::Future;
 use utils::SendBoxFuture;
 
 use core::error::*;
-use mail::{ FileLoader, RunElsewhere, BuilderContext };
+use context::{ FileLoader, RunElsewhere, BuilderContext };
 use mheaders::components::{ Mailbox,  MessageID };
 
 pub struct MailSendContext {

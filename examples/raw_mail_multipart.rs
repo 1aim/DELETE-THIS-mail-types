@@ -7,6 +7,7 @@ use futures::Future;
 use mail_codec::mail_builder_prelude::*;
 use mail_codec::resource_prelude::*;
 use mail_codec::default_impl::SimpleBuilderContext;
+//FIXME should be mail_codec::gen_multipart_mime
 use mail_codec::mail::mime::gen_multipart_mime;
 
 fn get_some_resource() -> Resource {

@@ -40,6 +40,8 @@ pub mod file_buffer;
 #[cfg(feature="default_impl_any")]
 pub mod default_impl;
 
+pub use self::mail::*;
+
 pub mod headers {
     pub use mheaders::*;
 }
