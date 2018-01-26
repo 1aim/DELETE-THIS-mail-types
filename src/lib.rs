@@ -17,9 +17,6 @@ extern crate soft_ascii_string;
 extern crate total_order_multi_map;
 extern crate tree_magic;
 extern crate chrono;
-
-
-#[cfg_attr(test, macro_use)]
 extern crate vec1;
 
 #[macro_use]
@@ -32,7 +29,7 @@ extern crate scoped_tls;
 #[cfg(feature="default_impl_cpupool")]
 extern crate futures_cpupool;
 
-mod utils;
+pub mod utils;
 pub mod mail;
 pub mod composition;
 pub mod file_buffer;
