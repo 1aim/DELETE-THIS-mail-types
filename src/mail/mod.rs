@@ -1,9 +1,6 @@
 use std::ops::Deref;
 use std::fmt;
 
-use mheaders::components::MediaType;
-use media_type::BOUNDARY;
-
 use core::codec::{EncodableInHeader, Encoder, Encodable};
 use soft_ascii_string::SoftAsciiString;
 use futures::{ Future, Async, Poll };
@@ -23,7 +20,6 @@ use self::builder::{
     check_header,
     check_multiple_headers,
 };
-use mime::gen_multipart_media_type;
 
 pub use self::builder::{
     Builder, MultipartBuilder, SinglepartBuilder
@@ -182,7 +178,7 @@ impl<'a, T> Future for MailFuture<'a, T>
             // this is conform with how futures work, as calling poll on a random future
             // after it completes has unpredictable results (through one of NotReady/Err/Panic)
             // use `Fuse` if you want more preditable behaviour in this edge case
-            .expect( "poll not to be called after completion" )
+            .expect( "[BUG] poll not to be called after completion" )
             .walk_mail_bodies_mut( &mut |body: &mut Resource| {
                 match body.poll_encoding_completion( ctx ) {
                     Ok( Async::NotReady ) => {
@@ -239,7 +235,6 @@ fn insert_generated_headers(mail: &mut Mail) -> Result<()> {
            auto_gen_headers(&mut mail.headers, body)?;
         }
         MailPart::MultipleBodies { ref mut bodies, .. } => {
-            auto_gen_multipart(&mut mail.headers)?;
             for sub_mail in bodies {
                 insert_generated_headers(sub_mail)?;
             }
@@ -249,43 +244,9 @@ fn insert_generated_headers(mail: &mut Mail) -> Result<()> {
     Ok(())
 }
 
-fn auto_gen_multipart(headers: &mut HeaderMap) -> Result<()> {
-    // ask following: <has content type header?><is correct type?><needs new mime?>
-    let current: Option<Result<Option<MediaType>>> = headers.get_single(ContentType)
-        .map(|res| {
-            let content_type = res?;
-            if content_type.get_param(BOUNDARY).is_none() {
-                //TODO keep other params, use set_param / param_entry
-                debug_assert_eq!(content_type.type_(), "multipart");
-                let media_type: MediaType = gen_multipart_media_type(content_type.subtype())?.into();
-                Ok(Some(media_type))
-            } else {
-                //FIXME is there any context where this is Ok, i.e. where we would want user
-                // provided boundary strings? I mean this is a possible atack vector under some
-                // cicumstances, maybe?
-                Ok(None)
-            }
-        });
-    if let Some(res) = current {
-        let maybe_new_content_type = res?;
-        if let Some(content_type) = maybe_new_content_type {
-            //FIXME uhm, get_single_mut?, entry?
-            let had_content_type = headers.remove_by_name(ContentType);
-            debug_assert!(had_content_type);
-            headers.insert(ContentType, content_type)?;
-        }
-    } else {
-        bail!("[BUG] multipart does not have content type header, should be enforce by builder")
-    }
-
-    // we do not care at this point that it's missing
-    // checks for quantities are doe after auto generation
-    Ok(())
-}
-
 fn auto_gen_headers(headers: &mut HeaderMap, body: &Resource) -> Result<()> {
     let file_buffer = body.get_if_encoded()?
-        .expect("encoded mail, should only contain already transferencoded resources");
+        .expect("[BUG] encoded mail, should only contain already transferencoded resources");
 
     headers.insert(ContentType, file_buffer.content_type().clone())?;
     headers.insert(ContentTransferEncoding, file_buffer.transfer_encoding().clone())?;
@@ -615,39 +576,6 @@ mod test {
 
         }
 
-        #[test]
-        fn generates_boundary_if_needed() {
-            let mail = Mail {
-                headers: headers!{
-                    From: ["random@this.is.no.mail"],
-                    ContentType: "multipart/mixed"
-                }.unwrap(),
-                body: MailPart::MultipleBodies {
-                    bodies: vec![
-                        Mail {
-                            headers: headers!{
-                                From: ["random@this.is.no.mail"]
-                            }.unwrap(),
-                            body: MailPart::SingleBody {
-                                body: Resource::from_text("r9".into())
-                            }
-                        }
-                    ],
-                    hidden_text: Default::default()
-                }
-            };
-
-            let ctx = ::default_impl::SimpleBuilderContext::new();
-            let enc_mail = assert_ok!(mail.into_encodeable_mail(&ctx).wait());
-
-
-            let headers = enc_mail.headers();
-            let ct = headers.get_single(ContentType)
-                .expect("there has to be a ContentType header");
-            let ct = assert_ok!(ct);
-            let pm = format!("no boundary on: {}", ct.as_str_repr());
-            assert!(ct.get_param(::media_type::BOUNDARY).is_some(), pm);
-        }
     }
 
 }
