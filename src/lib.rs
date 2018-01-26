@@ -50,6 +50,5 @@ pub mod prelude {
     pub use core::codec::{EncodableInHeader, Encodable, EncodeHandle};
     pub use mheaders::*;
     pub use mheaders::components::*;
-    pub use mail::Builder;
-    pub use mail::Resource;
+    pub use mail::{Builder, Mail, Resource};
 }
