@@ -4,8 +4,7 @@ extern crate mime;
 
 use futures::Future;
 
-use mail_codec::mail_builder_prelude::*;
-use mail_codec::resource_prelude::*;
+use mail_codec::prelude::*;
 
 use mail_codec::default_impl::SimpleBuilderContext;
 

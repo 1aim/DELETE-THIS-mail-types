@@ -51,4 +51,5 @@ pub mod prelude {
     pub use mheaders::components::*;
     pub use mail::Builder;
     pub use mail::mime::MultipartMime;
+    pub use mail::Resource;
 }
