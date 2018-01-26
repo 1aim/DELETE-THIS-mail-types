@@ -20,9 +20,6 @@ repository = "1aim/mail-codec"
 futures = "0.1.14"
 log = "0.3.8"
 rand = "0.3.15"
-scoped-tls = "0.1.0"
-serde = "1.0.10"
-serde_derive = "1.0.10"
 vec1 = { git="https://github.com/1aim/vec1" }
 total-order-multi-map = { git="https://github.com/1aim/total-order-multi-map" }
 mail-codec-core = { git="https://github.com/1aim/mail-codec-core" }
@@ -50,13 +47,10 @@ serde_json = "1.0.2"
 [features]
 debug_trace_tokens = []
 default = ["default_impl"]
-default_impl = ["default_impl_mail", "default_impl_compose"]
-default_impl_any = []
-default_impl_component_id = ["default_impl_any"]
-default_impl_compose = ["default_impl_name_composer", "default_impl_component_id"]
+default_impl =  ["default_impl_cpupool", "default_impl_fs", "default_impl_vfs"]
 default_impl_cpupool = ["futures-cpupool", "default_impl_any"]
 default_impl_fs = ["default_impl_any"]
-default_impl_mail = ["default_impl_cpupool", "default_impl_fs", "default_impl_vfs"]
-default_impl_name_composer = ["default_impl_any"]
 default_impl_vfs = ["default_impl_any"]
+default_impl_any = []
+
 traceing = [ "mail-codec-core/traceing", "mail-codec-headers/traceing" ]

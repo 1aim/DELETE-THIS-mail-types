@@ -384,7 +384,6 @@ mod test {
 
     use super::*;
 
-    use default_impl::SimpleContext;
     use default_impl::VFSFileLoader;
 
     use utils::timeout;

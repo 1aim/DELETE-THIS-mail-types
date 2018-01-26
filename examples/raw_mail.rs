@@ -1,4 +1,3 @@
-#[macro_use]
 extern crate mail_codec;
 extern crate futures;
 extern crate mime;
