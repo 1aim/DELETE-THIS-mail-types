@@ -1,5 +1,6 @@
 #![recursion_limit="128"]
 
+#[cfg_attr(test, macro_use)]
 extern crate mail_codec_core as core;
 extern crate mail_codec_headers as mheaders;
 
