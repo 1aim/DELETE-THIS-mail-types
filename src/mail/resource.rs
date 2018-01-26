@@ -382,12 +382,12 @@ mod test {
     use futures::Future;
     use futures::future::Either;
 
-    use futures_cpupool::{CpuPool, Builder};
+    use futures_cpupool::CpuPool;
 
     use super::*;
 
     use context::CompositeBuilderContext;
-    use default_impl::VFSFileLoader;
+    use default_impl::{VFSFileLoader, simple_cpu_pool};
 
     use utils::timeout;
 
@@ -408,15 +408,11 @@ mod test {
         }
     }
 
-    fn cpupool() -> CpuPool {
-        Builder::new().create()
-    }
-
     #[test]
     fn load_test() {
         let mut fload = VFSFileLoader::new();
         fload.register_file( "/test/me.yes", b"abc def!".to_vec() ).unwrap();
-        let ctx = SimpleContext::new( fload, cpupool() );
+        let ctx = SimpleContext::new(fload, simple_cpu_pool() );
 
         let spec = ResourceSpec {
             path: "/test/me.yes".into(),
@@ -442,7 +438,7 @@ mod test {
     fn load_test_utf8() {
         let mut fload = VFSFileLoader::new();
         fload.register_file( "/test/me.yes", "Öse".as_bytes().to_vec() ).unwrap();
-        let ctx = SimpleContext::new( fload, cpupool() );
+        let ctx = SimpleContext::new(fload, simple_cpu_pool() );
 
         let spec = ResourceSpec {
             path: "/test/me.yes".into(),
@@ -467,7 +463,7 @@ mod test {
     #[test]
     fn from_text_works() {
         let mut resource = Resource::from_text( "orange juice".into() );
-        resolve_resource( &mut resource, &SimpleContext::new( VFSFileLoader::new(), cpupool() ) );
+        resolve_resource( &mut resource, &SimpleContext::new(VFSFileLoader::new(), simple_cpu_pool() ) );
         let res = resource.get_if_encoded().unwrap().unwrap();
         let data: &[u8] = &*res;
         assert_eq!( b"orange juice", data );
