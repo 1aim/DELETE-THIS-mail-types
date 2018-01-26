@@ -1,13 +1,12 @@
 extern crate mail_codec;
 extern crate futures;
-extern crate mime;
+extern crate mime as media_type;
 
+use media_type::{MULTIPART, RELATED};
 use futures::Future;
 
 use mail_codec::prelude::*;
 use mail_codec::default_impl::SimpleBuilderContext;
-//FIXME should be mail_codec::gen_multipart_mime
-use mail_codec::mail::mime::gen_multipart_mime;
 
 fn get_some_resource() -> Resource {
     Resource::from_text("abcd↓efg".into())
@@ -22,7 +21,8 @@ fn _main() -> Result<()> {
 
     let builder_ctx = SimpleBuilderContext::default();
 
-    let mail = Builder::multipart( gen_multipart_mime("related")? )
+    let media_type = MediaType::new(MULTIPART, RELATED)?;
+    let mail = Builder::multipart( media_type )?
         .header( Subject, "that ↓ will be encoded " )?
         .header( From, [ "tim@tom.nixdomain" ])?
         .body( Builder::singlepart( get_some_resource() ).build()? )?

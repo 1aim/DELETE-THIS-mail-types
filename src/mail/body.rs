@@ -147,7 +147,7 @@ impl From<TransferEncodedFileBuffer> for Body {
 #[cfg(test)]
 mod test {
     use mheaders::components::TransferEncoding;
-    use mime::TEXT_PLAIN;
+    use media_type::TEXT_PLAIN;
     use core::utils::buffer::FileBuffer;
     use futures::{ self, Future };
 

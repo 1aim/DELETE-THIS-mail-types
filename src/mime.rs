@@ -1,14 +1,9 @@
-use std::ops::Deref;
-
 use rand;
 use rand::Rng;
 
+use core::error::{Result, ErrorKind, ResultExt};
 use mheaders::components::MediaType;
 
-use core::error::{ErrorKind, Result, ResultExt};
-use core::HeaderTryInto;
-
-use utils::is_multipart_mime;
 
 /// write a random sequence of chars valide for and boundary to the output buffer
 ///
@@ -24,7 +19,7 @@ pub fn create_random_boundary() -> String {
     // (it can be used in any place _except_ the last)
     debug_assert!(4 <= MULTIPART_BOUNDARY_LENGTH && MULTIPART_BOUNDARY_LENGTH <= 70);
     static CHARS: &[char] = &[
-                                      '\'', '(',
+        '\'', '(',
         ')',      '+', ',',      '.', '/', '0',
         '1', '2', '3', '4', '5', '6', '7', '8',
         '9', ':',           '=',      '?',
@@ -49,83 +44,17 @@ pub fn create_random_boundary() -> String {
 }
 
 
-#[derive(Debug)]
-pub struct SinglepartMime( MediaType );
-
-impl SinglepartMime {
-    pub fn new( mime: MediaType ) -> Result<Self> {
-        if !is_multipart_mime( &mime ) {
-            Ok( SinglepartMime( mime ) )
-        } else {
-            Err( ErrorKind::NotSinglepartMime( mime.into() ).into() )
-        }
-    }
-}
-
-impl HeaderTryInto<MediaType> for SinglepartMime {
-    fn try_into(self) -> Result<MediaType> {
-        Ok( self.0 )
-    }
-}
-
-impl Into<MediaType> for SinglepartMime {
-    fn into( self ) -> MediaType {
-        self.0
-    }
-}
-
-impl Deref for SinglepartMime {
-    type Target = MediaType;
-
-    fn deref( &self ) -> &MediaType {
-        &self.0
-    }
-}
-
-#[derive(Debug)]
-pub struct MultipartMime( MediaType );
-
-impl MultipartMime {
-
-    pub fn new( mime: MediaType ) -> Result<Self> {
-        if is_multipart_mime( &mime ) {
-            Ok( MultipartMime( mime ) )
-        }  else {
-            Err( ErrorKind::NotMultipartMime( mime.into() ).into() )
-        }
-
-    }
-}
-
-impl HeaderTryInto<MediaType> for MultipartMime {
-    fn try_into(self) -> Result<MediaType> {
-        Ok( self.0 )
-    }
-}
-
-impl Into<MediaType> for MultipartMime {
-    fn into( self ) -> MediaType {
-        self.0
-    }
-}
-
-impl Deref for MultipartMime {
-    type Target = MediaType;
-
-    fn deref( &self ) -> &MediaType {
-        &self.0
-    }
-}
-
-pub fn gen_multipart_mime<A>( subtype: A ) -> Result<MultipartMime>
+pub fn gen_multipart_media_type<A>(subtype: A ) -> Result<MediaType>
     where A: AsRef<str>
 {
     let boundary = create_random_boundary();
     let media_type = MediaType::new_with_params("multipart", subtype.as_ref(), vec![
         ("boundary", &*boundary)
     ]).chain_err(|| ErrorKind::GeneratingMimeFailed)?;
-    Ok(MultipartMime(media_type))
+    Ok(media_type)
 }
+
+
 
 #[cfg(test)]
 mod test {

@@ -6,7 +6,7 @@ use std::ops::Deref;
 use std::mem;
 use std::borrow::Cow;
 
-use mime::{TEXT, APPLICATION, OCTET_STREAM};
+use media_type::{TEXT, APPLICATION, OCTET_STREAM};
 use tree_magic;
 use futures::{  Future, Poll, Async };
 

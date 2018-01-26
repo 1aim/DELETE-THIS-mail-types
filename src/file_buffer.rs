@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use mime::{TEXT, CHARSET};
+use media_type::{TEXT, CHARSET};
 
 use mheaders::components::{TransferEncoding, MediaType};
 use core::utils::FileMeta;

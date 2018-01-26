@@ -1,7 +1,5 @@
 use std::marker::Send;
-use std::ops::Deref;
 
-use mime::{AnyMediaType, MULTIPART};
 use chrono;
 use futures::Future;
 
@@ -11,12 +9,6 @@ pub fn now() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now()
 }
 
-
-pub fn is_multipart_mime<T>( mime: &T) -> bool
-    where T: Deref<Target=AnyMediaType>
-{
-    mime.type_() == MULTIPART
-}
 
 #[cfg(test)]
 use futures::sync::oneshot;

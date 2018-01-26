@@ -9,7 +9,7 @@ extern crate error_chain;
 
 #[macro_use]
 extern crate log;
-extern crate mime;
+extern crate mime as media_type;
 extern crate futures;
 extern crate rand;
 extern crate soft_ascii_string;
@@ -29,6 +29,7 @@ mod macros;
 pub mod utils;
 pub mod mail;
 pub mod file_buffer;
+pub mod mime;
 
 #[cfg(feature="default_impl_any")]
 pub mod default_impl;
@@ -50,6 +51,5 @@ pub mod prelude {
     pub use mheaders::*;
     pub use mheaders::components::*;
     pub use mail::Builder;
-    pub use mail::mime::MultipartMime;
     pub use mail::Resource;
 }

@@ -12,18 +12,17 @@
 use soft_ascii_string::SoftAsciiString;
 
 use core::utils::uneraser_ref;
-use core::error::*;
+use core::error::{Result, ErrorKind};
 use core::codec::EncodableInHeader;
 use core::{ HeaderTryInto, Header, HeaderMap};
 use mheaders::{
     ContentType,
     ContentTransferEncoding
 };
+
 use mheaders::components::MediaType;
+//use mime::create_random_boundary;
 
-use utils::is_multipart_mime;
-
-use super::mime::MultipartMime;
 use super::resource::Resource;
 use super::{ MailPart, Mail };
 
@@ -104,9 +103,10 @@ pub fn check_multiple_headers( headers: &HeaderMap , is_multipart: bool) -> Resu
             "use Ressource::set_preferred_encoding on the body instead"
         ) );
     }
+    //FIMXE[BUG] get->is_multipart seems wrong instead is_multipart->get?
     if let Some( mime ) = headers.get_single(ContentType) {
         if is_multipart {
-            if !is_multipart_mime( mime? ) {
+            if !mime?.is_multipart() {
                 return Err( ErrorKind::ContentTypeAndBodyIncompatible.into() )
             }
         } else {
@@ -132,7 +132,7 @@ pub fn check_header<H>(
             if is_multipart {
                 let mime: &MediaType = uneraser_ref(hbody)
                     .ok_or_else( || "custom Content-Type headers are not supported" )?;
-                if !is_multipart_mime( mime ) {
+                if !mime.is_multipart() {
                     return Err( ErrorKind::ContentTypeAndBodyIncompatible.into() )
                 }
             } else {
@@ -157,7 +157,26 @@ pub fn check_header<H>(
 
 impl Builder {
 
-    pub fn multipart( mime: MultipartMime ) -> MultipartBuilder {
+    /// create a MultipartBuilder with the given media-type as content-type
+    ///
+    /// This function will always set the boundary parameter to a random
+    /// generated boundary string. If the media type already had it
+    /// boundary parameter it is overwritten.
+    ///
+    /// # Error
+    ///
+    /// if the media-type is not a `multipart/` media type an
+    /// error is returned
+    pub fn multipart(media_type: MediaType) -> Result<MultipartBuilder> {
+        if !media_type.is_multipart() {
+            return Err( ErrorKind::NotMultipartMime( media_type.into() ).into() );
+        }
+
+        //TODO implement set boundary
+//        let mut media_type = media_type;
+//        let boundary = create_random_boundary();
+//        media_type.set_param(BOUNDARY, boundary);
+
         let res = MultipartBuilder {
             inner: BuilderShared::new(),
             hidden_text: None,
@@ -166,7 +185,7 @@ impl Builder {
 
         //UNWRAP_SAFETY: it can only fail with illegal headers,
         // but this header can not be illegal
-        res.header( ContentType, mime ).unwrap()
+        Ok(res.header( ContentType, media_type ).unwrap())
     }
 
     pub fn singlepart( r: Resource ) -> SinglepartBuilder {

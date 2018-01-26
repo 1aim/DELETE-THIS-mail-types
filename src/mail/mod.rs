@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::fmt;
 
 use mheaders::components::MediaType;
-use mime::BOUNDARY;
+use media_type::BOUNDARY;
 
 use core::codec::{EncodableInHeader, Encoder, Encodable};
 use soft_ascii_string::SoftAsciiString;
@@ -23,7 +23,7 @@ use self::builder::{
     check_header,
     check_multiple_headers,
 };
-use self::mime::gen_multipart_mime;
+use mime::gen_multipart_media_type;
 
 pub use self::builder::{
     Builder, MultipartBuilder, SinglepartBuilder
@@ -32,7 +32,6 @@ pub use self::builder::{
 pub use self::resource::*;
 
 
-pub mod mime;
 pub mod context;
 mod resource;
 mod builder;
@@ -258,7 +257,7 @@ fn auto_gen_multipart(headers: &mut HeaderMap) -> Result<()> {
             if content_type.get_param(BOUNDARY).is_none() {
                 //TODO keep other params, use set_param / param_entry
                 debug_assert_eq!(content_type.type_(), "multipart");
-                let media_type: MediaType = gen_multipart_mime(content_type.subtype())?.into();
+                let media_type: MediaType = gen_multipart_media_type(content_type.subtype())?.into();
                 Ok(Some(media_type))
             } else {
                 //FIXME is there any context where this is Ok, i.e. where we would want user
@@ -647,7 +646,7 @@ mod test {
                 .expect("there has to be a ContentType header");
             let ct = assert_ok!(ct);
             let pm = format!("no boundary on: {}", ct.as_str_repr());
-            assert!(ct.get_param(::mime::BOUNDARY).is_some(), pm);
+            assert!(ct.get_param(::media_type::BOUNDARY).is_some(), pm);
         }
     }
 

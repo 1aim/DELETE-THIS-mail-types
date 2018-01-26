@@ -3,7 +3,7 @@ use soft_ascii_string::{
     SoftAsciiChar,
     SoftAsciiString
 };
-use mime::BOUNDARY;
+use media_type::BOUNDARY;
 
 use core::error::{Result, ErrorKind, Error};
 use core::codec::{Encoder, EncodableInHeader, EncodeHandle};
