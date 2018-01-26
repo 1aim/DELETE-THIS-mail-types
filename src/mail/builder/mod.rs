@@ -1,14 +1,3 @@
-//  Builder
-//     .multipart( MultipartMime ) -> MultipartBuilder
-//          .set_header( Header )?
-//          .set_body( |builder| builder.singlepart( ... )...build() )?
-//          .set_body( |builder| builder.multipart( MediaType )...build() )?
-//          .build()?
-//     .singlepart( Resource ) -> SinglePartBuilder
-//          .set_header( Header )
-//          .build()
-//
-//
 use soft_ascii_string::SoftAsciiString;
 
 use core::utils::uneraser_ref;
