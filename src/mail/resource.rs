@@ -382,11 +382,16 @@ mod test {
     use futures::Future;
     use futures::future::Either;
 
+    use futures_cpupool::{CpuPool, Builder};
+
     use super::*;
 
+    use context::CompositeBuilderContext;
     use default_impl::VFSFileLoader;
 
     use utils::timeout;
+
+    type SimpleContext = CompositeBuilderContext<VFSFileLoader, CpuPool>;
 
     fn resolve_resource<C: BuilderContext+Debug>( resource: &mut Resource, ctx: &C ) {
         let res = resource
@@ -403,11 +408,15 @@ mod test {
         }
     }
 
+    fn cpupool() -> CpuPool {
+        Builder::new().create()
+    }
+
     #[test]
     fn load_test() {
         let mut fload = VFSFileLoader::new();
         fload.register_file( "/test/me.yes", b"abc def!".to_vec() ).unwrap();
-        let ctx = SimpleContext::with_vfs( "test.notadomain".into(), fload );
+        let ctx = SimpleContext::new( fload, cpupool() );
 
         let spec = ResourceSpec {
             path: "/test/me.yes".into(),
@@ -433,7 +442,7 @@ mod test {
     fn load_test_utf8() {
         let mut fload = VFSFileLoader::new();
         fload.register_file( "/test/me.yes", "Öse".as_bytes().to_vec() ).unwrap();
-        let ctx = SimpleContext::with_vfs( "test.notadomain".into(), fload );
+        let ctx = SimpleContext::new( fload, cpupool() );
 
         let spec = ResourceSpec {
             path: "/test/me.yes".into(),
@@ -458,7 +467,7 @@ mod test {
     #[test]
     fn from_text_works() {
         let mut resource = Resource::from_text( "orange juice".into() );
-        resolve_resource( &mut resource, &SimpleContext::new( "random".into() ) );
+        resolve_resource( &mut resource, &SimpleContext::new( VFSFileLoader::new(), cpupool() ) );
         let res = resource.get_if_encoded().unwrap().unwrap();
         let data: &[u8] = &*res;
         assert_eq!( b"orange juice", data );
