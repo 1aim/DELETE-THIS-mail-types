@@ -1,5 +1,7 @@
 use soft_ascii_string::SoftAsciiString;
 
+use media_type::BOUNDARY;
+
 use core::utils::uneraser_ref;
 use core::error::{Result, ErrorKind};
 use core::codec::EncodableInHeader;
@@ -10,7 +12,7 @@ use mheaders::{
 };
 
 use mheaders::components::MediaType;
-//use mime::create_random_boundary;
+use mime::create_random_boundary;
 
 use super::resource::Resource;
 use super::{ MailPart, Mail };
@@ -161,10 +163,9 @@ impl Builder {
             return Err( ErrorKind::NotMultipartMime( media_type.into() ).into() );
         }
 
-        //TODO implement set boundary
-//        let mut media_type = media_type;
-//        let boundary = create_random_boundary();
-//        media_type.set_param(BOUNDARY, boundary);
+        let mut media_type = media_type;
+        let boundary = create_random_boundary();
+        media_type.set_param(BOUNDARY, boundary);
 
         let res = MultipartBuilder {
             inner: BuilderShared::new(),
