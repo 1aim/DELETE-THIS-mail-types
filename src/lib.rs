@@ -23,6 +23,8 @@ extern crate vec1;
 #[cfg(feature="default_impl_cpupool")]
 extern crate futures_cpupool;
 
+#[macro_use]
+mod macros;
 pub mod utils;
 pub mod mail;
 pub mod file_buffer;
