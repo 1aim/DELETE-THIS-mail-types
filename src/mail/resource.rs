@@ -232,6 +232,9 @@ impl Resource {
                         ctx.execute(
                             ctx.load_file( Cow::Owned( path ) )
                                 .and_then(move |bytes| {
+                                    //FEAT: some post processing/loading hook
+                                    // +/ sniff media type hook usage
+                                    // +/ verify media type hook usage
                                     //use now as read date
                                     let meta = FileMeta {
                                         file_name: name,
