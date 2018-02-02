@@ -103,8 +103,8 @@ pub fn check_multiple_headers( headers: &HeaderMap , is_multipart: bool) -> Resu
         } else {
             bail!( concat!(
                     "setting content type through a header for a single part body",
-                    "is not supported use RessourceSpec::use_mime if you want to",
-                    "override the content type"
+                    "is not supported use RessourceSpec::media_type to specify the",
+                    "content type"
                 ) );
         }
     }
@@ -129,8 +129,8 @@ pub fn check_header<H>(
             } else {
                 bail!( concat!(
                     "setting content type through a header for a single part body",
-                    "is not supported use RessourceSpec::use_mime if you want to",
-                    "override the content type"
+                    "is not supported use RessourceSpec::media_type to specify the",
+                    "content type"
                 ) );
             }
 

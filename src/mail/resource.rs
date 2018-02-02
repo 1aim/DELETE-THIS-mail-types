@@ -28,8 +28,8 @@ use super::context::BuilderContext;
 #[derive( Debug, Clone )]
 pub struct ResourceSpec {
     pub path: PathBuf,
-    pub use_name: Option<String>,
-    pub use_mime: Option<MediaType>
+    pub media_type: MediaType,
+    pub name: Option<String>
 }
 
 #[derive(Debug)]
@@ -221,36 +221,24 @@ impl Resource {
         loop {
             continue_with = match continue_with {
                 Spec(spec) => {
-                    let ResourceSpec { path, use_mime, use_name } = spec;
-                    //we require a name
-                    let name =
-                        if let Some(name) = use_name {
-                            name
-                        } else {
-                            let name = path
-                                .file_name()
-                                .ok_or_else(|| -> Error {
-                                    ErrorKind::PathToFileWithoutFileName(path.to_owned()).into()
-                                })?
-                                .to_string_lossy()
-                                .into_owned();
-                            name
-                        };
+                    let ResourceSpec { path, media_type, name } = spec;
+                    //try finding a default name
+                    let name = name.or_else(
+                        || path.file_name()
+                            .map(|name| name.to_string_lossy().into_owned())
+                    );
+
                     LoadingBuffer(
                         ctx.execute(
                             ctx.load_file( Cow::Owned( path ) )
                                 .and_then(move |bytes| {
-
-                                    //we require a mime/content-type
-                                    let mime = detect_mime(&bytes, use_mime)?;
-
                                     //use now as read date
                                     let meta = FileMeta {
-                                        file_name: Some(name),
+                                        file_name: name,
                                         read_date: Some(now()),
                                         ..Default::default()
                                     };
-                                    Ok(FileBuffer::new_with_file_meta(mime, bytes, meta))
+                                    Ok(FileBuffer::new_with_file_meta(media_type, bytes, meta))
                                 })
                         )
                     )
@@ -313,26 +301,6 @@ impl<'a, C: 'a> Future for ResourceFutureRef<'a, C>
         self.resource_ref.poll_encoding_completion( self.ctx_ref )
     }
 }
-
-fn detect_mime<B: AsRef<[u8]>>(buffer: B, use_mime: Option<MediaType>) -> Result<MediaType> {
-    Ok(if let Some(mime) = use_mime {
-        mime
-    } else {
-        //FIXME tree_magic is far from optimal
-        let media_type = tree_magic::from_u8(buffer.as_ref());
-        let media_type: MediaType = MediaType::parse(media_type)
-            .chain_err( || "[BUG] invalid media_type by tree_magic" )?;
-        if media_type.type_() == TEXT {
-            bail!("auto-detecting charset is currently not supported");
-        }
-        if media_type.type_() == APPLICATION
-            && media_type.subtype() == OCTET_STREAM {
-            bail!("auto-detection failed got application/octet-stream")
-        }
-        media_type
-    })
-}
-
 
 
 impl fmt::Debug for ResourceInner {
@@ -416,8 +384,8 @@ mod test {
 
         let spec = ResourceSpec {
             path: "/test/me.yes".into(),
-            use_name: None,
-            use_mime: Some( MediaType::parse("text/plain;charset=us-ascii").unwrap() )
+            media_type: MediaType::parse("text/plain;charset=us-ascii").unwrap(),
+            name: None
         };
 
         let mut resource = Resource::from_spec( spec );
@@ -442,8 +410,8 @@ mod test {
 
         let spec = ResourceSpec {
             path: "/test/me.yes".into(),
-            use_name: None,
-            use_mime: Some( MediaType::parse("text/plain;charset=utf8").unwrap() )
+            media_type: MediaType::parse("text/plain;charset=utf8").unwrap(),
+            name: None,
         };
 
         let mut resource = Resource::from_spec( spec );
