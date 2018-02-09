@@ -14,7 +14,8 @@ use mheaders::components::MediaType;
 /// The boundary will be picked from ascii `VCHAR`'s (us-ascii >= 33 and <= 126) but
 /// following `VCHAR`'s are excluded `'"'`, `'-'` and `'\\'`.
 pub fn create_random_boundary() -> String {
-    const MULTIPART_BOUNDARY_LENGTH: usize = 70;
+    //the maximal boundary with wich " boundary=\"...\"" fits into 78 chars line length limit
+    const MULTIPART_BOUNDARY_LENGTH: usize = 66;
     // boundary chars based on rfc2046, excluding " "
     // (it can be used in any place _except_ the last)
     debug_assert!(4 <= MULTIPART_BOUNDARY_LENGTH && MULTIPART_BOUNDARY_LENGTH <= 70);
