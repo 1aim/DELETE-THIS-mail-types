@@ -6,11 +6,9 @@ use std::ops::Deref;
 use std::mem;
 use std::borrow::Cow;
 
-use media_type::{TEXT, APPLICATION, OCTET_STREAM};
-use tree_magic;
 use futures::{  Future, Poll, Async };
 
-use core::error::{ Error, ErrorKind, Result, ResultExt };
+use core::error::{Error, Result};
 use core::codec::BodyBuffer;
 use core::utils::FileMeta;
 

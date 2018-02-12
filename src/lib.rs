@@ -46,7 +46,6 @@ pub mod prelude {
     pub type Encoder = ::core::codec::Encoder<::mail::Resource>;
     pub use core::*;
     pub use core::error::*;
-    pub use core::grammar::MailType;
     pub use core::codec::{EncodableInHeader, Encodable, EncodeHandle};
     pub use mheaders::*;
     pub use mheaders::components::*;

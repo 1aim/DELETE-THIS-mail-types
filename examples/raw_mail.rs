@@ -5,7 +5,6 @@ extern crate mime;
 use futures::Future;
 
 use mail_codec::prelude::*;
-
 use mail_codec::default_impl::SimpleBuilderContext;
 
 
