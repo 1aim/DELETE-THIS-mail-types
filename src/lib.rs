@@ -26,6 +26,7 @@ extern crate futures_cpupool;
 
 #[macro_use]
 mod macros;
+pub mod error;
 pub mod utils;
 pub mod mail;
 pub mod file_buffer;
@@ -45,7 +46,6 @@ pub use mheaders::components::MediaType;
 pub mod prelude {
     pub type Encoder = ::core::codec::Encoder<::mail::Resource>;
     pub use core::*;
-    pub use core::error::*;
     pub use core::codec::{EncodableInHeader, Encodable, EncodeHandle};
     pub use mheaders::*;
     pub use mheaders::components::*;

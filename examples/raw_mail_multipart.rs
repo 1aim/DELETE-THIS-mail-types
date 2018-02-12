@@ -1,12 +1,13 @@
-extern crate mail_codec;
+extern crate mail_codec as mail;
 extern crate futures;
 extern crate mime as media_type;
 
 use media_type::{MULTIPART, RELATED};
 use futures::Future;
 
-use mail_codec::prelude::*;
-use mail_codec::default_impl::SimpleBuilderContext;
+use mail::error::Result;
+use mail::prelude::*;
+use mail::default_impl::SimpleBuilderContext;
 
 fn get_some_resource() -> Resource {
     Resource::from_text("abcd↓efg".into())
