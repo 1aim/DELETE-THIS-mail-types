@@ -31,6 +31,8 @@ pub mod utils;
 pub mod mail;
 pub mod file_buffer;
 pub mod mime;
+mod iri;
+pub use self::iri::IRI;
 
 #[cfg(feature="default_impl_any")]
 pub mod default_impl;
