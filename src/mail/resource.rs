@@ -33,7 +33,7 @@ pub struct ResourceFutureRef<'a, C: 'a> {
 pub struct Resource {
     //TODO change to Arc<Inner> with Inner { source: Source, state: RwLock<State> }
     // using inner.source(), inner.state_mut()-> Lock, inner.state() -> Lock
-    inner: Arc<RwLock<ResourceInner>>,
+    inner: Arc<ResourceInner>,
     preferred_encoding: Option<TransferEncoding>
 }
 
@@ -58,7 +58,7 @@ pub enum ResourceStateInfo {
 #[derive(Debug)]
 struct ResourceInner {
     //CONSTRAINT: assert!(state.is_loaded() || source.is_some())
-    state: ResourceState,
+    state: RwLock<ResourceState>,
     source: Option<Source>,
 }
 
@@ -76,8 +76,8 @@ pub struct Guard<'lock> {
     // just unused through it still _drops_ and has a _side effect_
     // on drop (which is what rustc's lint does not "know")
     #[allow(dead_code)]
-    guard: RwLockReadGuard<'lock, ResourceInner>,
-    inner_ref: *const TransferEncodedFileBuffer,
+    guard: RwLockReadGuard<'lock, ResourceState>,
+    state_ref: *const TransferEncodedFileBuffer,
     // given that we neither own a value we point to (DropCheck) nor
     // have a unused type parameter nor lifetime this is probably not
     // needed, still it's better to be safe and have this zero-runtime-overhead
@@ -92,9 +92,10 @@ impl Resource {
     fn _new(state: ResourceState, source: Option<Source>) -> Self {
         debug_assert!(state.state_info() != ResourceStateInfo::NotLoaded || source.is_some());
         Resource {
-            inner: Arc::new( RwLock::new( ResourceInner {
-                state, source,
-            } ) ),
+            inner: Arc::new(ResourceInner {
+                source,
+                state: RwLock::new(state)
+            }),
             preferred_encoding: None
         }
     }
@@ -124,7 +125,7 @@ impl Resource {
 
 
     pub fn state_info(&self) -> ResourceStateInfo {
-        self.read_inner().state.state_info()
+        self.inner.state().state_info()
     }
 
     pub fn set_preferred_encoding( &mut self, tenc: TransferEncoding ) {
@@ -136,52 +137,17 @@ impl Resource {
     }
 
 
-
-    fn read_inner( &self ) -> RwLockReadGuard<ResourceInner> {
-        match self.inner.read() {
-            Ok( guard ) => guard,
-            Err( poisoned ) => {
-                // we already have our own form of poisoning with mem-replacing state with Failed
-                // during the any mutating operation which can panic (which currently only is poll)
-                let guard = poisoned.into_inner();
-                guard
-            }
-        }
-    }
-
-    /// # Unwindsafty
-    ///
-    /// This method accesses the inner lock regardless of
-    /// poisoning the reason why this is fine is that all
-    /// operations which modify the guarded value _and_ can
-    /// panic do have their own form of poisoning. Currently
-    /// this is just `poll_encoding_completion` which does
-    /// modify the inner `stat` and uses `Failed` as a form
-    /// of poison state. **Any usecase which can panic needs
-    /// to make sure it's unwind safe _without lock poisoning_**
-    fn write_inner( &self ) -> RwLockWriteGuard<ResourceInner> {
-        match self.inner.write() {
-            Ok( guard ) => guard,
-            Err( poisoned ) => {
-                // we already have our own form of poisoning with mem-replacing state with Failed
-                // during the any mutating operation which can panic (which currently only is poll)
-                let guard = poisoned.into_inner();
-                guard
-            }
-        }
-    }
-
     pub fn get_if_encoded( &self ) -> Result<Option<Guard>> {
         use self::ResourceState::*;
-        let inner = self.read_inner();
-        let ptr = match inner.state {
+        let state_guard = self.inner.state();
+        let ptr = match *state_guard {
             TransferEncoded( ref encoded )  => Some( encoded as *const TransferEncodedFileBuffer ),
             _ => None
         };
 
         Ok( ptr.map( |ptr |Guard {
-            guard: inner,
-            inner_ref: ptr,
+            guard: state_guard,
+            state_ref: ptr,
             _marker: PhantomData
         } ) )
     }
@@ -191,6 +157,10 @@ impl Resource {
             resource_ref: self,
             ctx_ref: ctx
         }
+    }
+
+    pub fn source(&self) -> Option<&Source> {
+        self.inner.source()
     }
 
     /// Tries to transform the resource into a state where it is not loaded.
@@ -212,9 +182,8 @@ impl Resource {
     /// `try_unload` is used on a `Resource` which has no `Source`.
     ///
     pub fn try_unload(&self) -> Result<()> {
-        let mut inner = self.write_inner();
-        if inner.source.is_some() {
-            inner.state = ResourceState::NotLoaded;
+        if self.source().is_some() {
+            *self.inner.state_mut() = ResourceState::NotLoaded;
             Ok(())
         } else {
             //TODO typed error
@@ -227,31 +196,26 @@ impl Resource {
     /// It is also true if the resource is corupted and therefore already not in
     /// a loaded state.
     pub fn can_be_unloaded(&self) -> bool {
-        self.read_inner().source.is_some()
+        self.inner.source().is_some()
     }
 
     pub fn poll_encoding_completion<C>( &mut self, ctx: &C ) -> Poll<(), Error>
         where C: BuilderContext
     {
-        let mut inner = self.write_inner();
+        let mut state = self.inner.state_mut();
         //TODO this already works like poisoning so we don't really need the lock poisoning
         //  Solutions:
         //     a) use parking lot it's faster and does not implement lock poisoning
         //     b) have a catch + resume unwind handle which releses the lock before resuming
         //     c) [for now] if write_inner stumbles across poison it will
-        let moved_out = mem::replace(&mut inner.state, ResourceState::Failed );
-        let (move_back_in, state) =
-            Resource::_poll_encoding_completion( moved_out, inner.source.as_ref(), ctx, &self.preferred_encoding )?;
-        mem::replace( &mut inner.state, move_back_in );
-        Ok( state )
+        let moved_out = mem::replace(&mut *state, ResourceState::Failed );
+        let (move_back_in, async_state) = self._poll_encoding_completion(moved_out, ctx)?;
+        mem::replace( &mut *state, move_back_in );
+        Ok( async_state )
     }
 
-    fn _poll_encoding_completion<C>(
-        resource: ResourceState,
-        source: Option<&Source>,
-        ctx: &C,
-        pref_enc: &Option<TransferEncoding>
-    ) -> Result<(ResourceState, Async<()>)>
+    fn _poll_encoding_completion<C>(&self, resource: ResourceState, ctx: &C)
+        -> Result<(ResourceState, Async<()>)>
         where C: BuilderContext
     {
         use self::ResourceState::*;
@@ -270,7 +234,7 @@ impl Resource {
         loop {
             continue_with = match continue_with {
                 NotLoaded => {
-                    let source: &Source = source
+                    let source: &Source = self.source()
                         .ok_or_else(|| -> Error {
                             //TODO typed error
                             "[BUG] illegal state no source and not loaded".into()
@@ -291,10 +255,10 @@ impl Resource {
                 },
 
                 Loaded(buf) => {
-                    let pe = pref_enc.clone();
+                    let pref_enc = self.preferred_encoding;
                     EncodingBuffer( ctx.offload_fn(move || {
-                        TransferEncodedFileBuffer::encode_buffer(buf, pe.as_ref())
-                    } ) )
+                        TransferEncodedFileBuffer::encode_buffer(buf, pref_enc)
+                    }))
                 },
 
                 EncodingBuffer(mut fut) => {
@@ -319,6 +283,46 @@ impl Resource {
     }
 }
 
+impl ResourceInner {
+
+    fn state( &self ) -> RwLockReadGuard<ResourceState> {
+        match self.state.read() {
+            Ok( guard ) => guard,
+            Err( poisoned ) => {
+                // we already have our own form of poisoning with mem-replacing state with Failed
+                // during the any mutating operation which can panic (which currently only is poll)
+                let guard = poisoned.into_inner();
+                guard
+            }
+        }
+    }
+
+    /// # Unwindsafty
+    ///
+    /// This method accesses the inner lock regardless of
+    /// poisoning the reason why this is fine is that all
+    /// operations which modify the guarded value _and_ can
+    /// panic do have their own form of poisoning. Currently
+    /// this is just `poll_encoding_completion` which does
+    /// modify the inner `stat` and uses `Failed` as a form
+    /// of poison state. **Any usecase which can panic needs
+    /// to make sure it's unwind safe _without lock poisoning_**
+    fn state_mut( &self ) -> RwLockWriteGuard<ResourceState> {
+        match self.state.write() {
+            Ok( guard ) => guard,
+            Err( poisoned ) => {
+                // we already have our own form of poisoning with mem-replacing state with Failed
+                // during the any mutating operation which can panic (which currently only is poll)
+                let guard = poisoned.into_inner();
+                guard
+            }
+        }
+    }
+
+    fn source(&self) -> Option<&Source> {
+        self.source.as_ref()
+    }
+}
 
 impl<'a, C: 'a> Future for ResourceFutureRef<'a, C>
     where C: BuilderContext
@@ -367,7 +371,7 @@ impl<'a> Deref for Guard<'a> {
         // to the lifetime of the RwLock and therefore lives longer as
         // the Guard which is also part of this struct and therefore
         // has to life at last as long as the struct
-        unsafe { &*self.inner_ref }
+        unsafe { &*self.state_ref }
     }
 }
 
