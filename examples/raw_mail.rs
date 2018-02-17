@@ -62,7 +62,7 @@ fn _main() -> Result<()> {
     let encodable_mail = mail.into_encodeable_mail( &builder_ctx ).wait().unwrap();
     encodable_mail.encode( &mut encoder )?;
 
-    println!( "{}", encoder.into_string_lossy().unwrap() );
+    println!( "{}", encoder.to_string_lossy().unwrap() );
 
     Ok( () )
 

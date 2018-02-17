@@ -113,28 +113,24 @@ impl TransferEncodedFileBuffer {
     }
 
     /// transforms a unencoded FileBuffer into a TransferEncodedFileBuffer
-///
-/// if a preferred_encoding is given it is used,
-/// else if the buffer has a ascii charset 7Bit encoding is used
-/// else if the buffer contains text quoted-printable is used
-/// else base64 encoding is used
+    ///
+    /// if a preferred_encoding is given it is used,
+    /// else if the buffer has a ascii charset 7Bit encoding is used
+    /// else if the buffer contains text quoted-printable is used
+    /// else base64 encoding is used
     pub fn encode_buffer(
         buffer: FileBuffer,
-        preferred_encoding: Option<&TransferEncoding>
+        //Note: TransferEncoding is Copy
+        preferred_encoding: Option<TransferEncoding>
     ) -> Result<TransferEncodedFileBuffer>
     {
         use self::TransferEncoding::*;
-        let encoding;
-        let encoding_ref;
 
-        if let Some( enc_ref ) = preferred_encoding {
-            encoding_ref = enc_ref;
-        } else {
-            encoding = find_encoding( &buffer );
-            encoding_ref = &encoding;
-        }
+        let encoding = preferred_encoding
+            .unwrap_or_else(|| find_encoding(&buffer));
 
-        match *encoding_ref {
+
+        match encoding {
             _7Bit => encode_7bit( buffer ),
             _8Bit => encode_8bit( buffer ),
             Binary => encode_binary( buffer ),

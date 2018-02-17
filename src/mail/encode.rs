@@ -114,8 +114,7 @@ fn encode_mail_part(mail: &Mail, encoder:  &mut Encoder<Resource> ) -> Result<()
             let boundary;
             if let Some( media_type ) = mail.headers.get_single(ContentType) {
                 boundary = media_type?.get_param(BOUNDARY)
-                    //FIXME is [BUG] ok here? it should be handled by the uper layers but
-                    // it's just a should ...
+                    //TODO typed error
                     .ok_or_else( ||-> Error { "[BUG] boundary gone missing".into() } )?
                     .to_content()
             } else {

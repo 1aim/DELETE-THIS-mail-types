@@ -110,7 +110,7 @@ impl Mail {
 
     pub fn set_headers( &mut self, headers: HeaderMap ) -> Result<()> {
         check_multiple_headers( &headers, self.body.is_multipart() )?;
-        self.headers.extend( headers )?;
+        self.headers.try_extend( headers )?;
         Ok( () )
     }
 
