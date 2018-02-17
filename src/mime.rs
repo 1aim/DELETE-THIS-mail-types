@@ -9,7 +9,7 @@ use mheaders::components::MediaType;
 ///
 /// Note that it might be required to quote the boundary.
 ///
-/// The boundary (excluding quotations) will start with `"=_^"` which is neither
+/// The boundary (excluding quotations) will start with `"=_"` which is neither
 /// valid for base64 nor quoted-printable encoding.
 ///
 /// The boundary will be 66 chars long, this is so that if a boundary parameter is
@@ -53,9 +53,9 @@ pub fn create_random_boundary() -> String {
 
     // we add =_^ to the boundary, as =_^ is neither valid in base64 nor quoted-printable
     let mut out = String::with_capacity(MULTIPART_BOUNDARY_LENGTH);
-    out.push_str("=_^");
+    out.push_str("=_");
     let mut rng = rand::thread_rng();
-    for _ in 3..(MULTIPART_BOUNDARY_LENGTH-1) {
+    for _ in 2..(MULTIPART_BOUNDARY_LENGTH-1) {
         out.push( CHARS[ rng.gen_range( 0, CHARS.len() )] )
     }
 
@@ -94,7 +94,7 @@ mod test {
         #[test]
         fn boundary_start_special() {
             let out = create_random_boundary();
-            assert!(out.starts_with("=_^"));
+            assert!(out.starts_with("=_"));
         }
 
         #[test]
