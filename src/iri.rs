@@ -25,6 +25,20 @@ pub struct IRI {
 
 impl IRI {
 
+    /// create a new IRI from a scheme part and a tail part
+    pub fn from_parts(scheme: &str, tail: &str) -> Result<Self, Error> {
+        Self::validate_scheme(scheme)?;
+        let scheme_len = scheme.len();
+        let mut buffer = String::with_capacity(scheme_len + 1 + tail.len());
+        buffer.push_str(scheme);
+        buffer.push(':');
+        buffer.push_str(tail);
+        Ok(IRI {
+            iri: buffer,
+            scheme_end_idx: scheme_len
+        })
+    }
+
     /// crates a new a IRI
     ///
     /// 1. this determines the first occurenc of `:` to split the input into scheme and tail
@@ -32,7 +46,7 @@ impl IRI {
     ///    compatible, i.e. is ascii, starting with a letter followed by alpha numeric characters
     ///    (or `"+"`,`"-"`,`"."`).
     /// 3. converts the scheme part to lower case
-    pub fn new<I: Into<String>>(iri: I) -> Result<IRI, Error> {
+    pub fn new<I: Into<String>>(iri: I) -> Result<Self, Error> {
         let mut buffer = iri.into();
         let split_pos = buffer.bytes().position(|b| b == b':')
             //TODO error type
@@ -40,19 +54,7 @@ impl IRI {
         {
             let scheme = &mut buffer[..split_pos];
             {
-                let mut iter = scheme.bytes();
-                let valid =
-                    iter.next().map(|bch|
-                        //FIXME use is_ascii_alphabetic once stable
-                        bch.is_ascii_alphabetic()).unwrap_or(false)
-                    && iter.all(|bch|
-                        //FIXME use is_ascii_alphanumeric once stable
-                        bch.is_ascii_alphanumeric() || bch == b'+' || bch == b'-' || bch == b'.');
-
-                if !valid {
-                    //TODO error type
-                    return Err("invalid iri scheme".into());
-                }
+                Self::validate_scheme(scheme)?;
             }
 
             scheme.make_ascii_lowercase();
@@ -62,6 +64,22 @@ impl IRI {
             iri: buffer,
             scheme_end_idx: split_pos
         })
+    }
+
+    fn validate_scheme(scheme: &str) -> Result<(), Error> {
+        let mut iter = scheme.bytes();
+        let valid = iter.next().map(|bch|
+            //FIXME use is_ascii_alphabetic once stable
+            bch.is_ascii_alphabetic()).unwrap_or(false)
+            && iter.all(|bch|
+            //FIXME use is_ascii_alphanumeric once stable
+            bch.is_ascii_alphanumeric() || bch == b'+' || bch == b'-' || bch == b'.');
+
+        if !valid {
+            //TODO error type
+            return Err("invalid iri scheme".into());
+        }
+        Ok(())
     }
 
     /// the scheme part of the uri excluding the `:` seperator

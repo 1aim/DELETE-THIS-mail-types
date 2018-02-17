@@ -25,10 +25,10 @@ pub struct FileBuffer {
 impl FileBuffer {
 
     pub fn new( content_type: MediaType, data: Vec<u8> ) -> FileBuffer {
-        FileBuffer::new_with_file_meta( content_type, data, Default::default() )
+        FileBuffer::with_file_meta(content_type, data, Default::default() )
     }
 
-    pub fn new_with_file_meta( content_type: MediaType, data: Vec<u8>, file_meta: FileMeta ) -> FileBuffer {
+    pub fn with_file_meta(content_type: MediaType, data: Vec<u8>, file_meta: FileMeta ) -> FileBuffer {
         FileBuffer { content_type, data, file_meta }
     }
 
@@ -143,6 +143,9 @@ impl TransferEncodedFileBuffer {
         }
     }
 
+    pub fn as_slice(&self) -> &[u8] {
+        self
+    }
 }
 
 

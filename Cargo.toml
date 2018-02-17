@@ -45,12 +45,10 @@ version = "0.1.5"
 serde_json = "1.0.2"
 
 [features]
-debug_trace_tokens = []
 default = ["default_impl"]
-default_impl =  ["default_impl_cpupool", "default_impl_fs", "default_impl_vfs"]
+default_impl =  ["default_impl_cpupool", "default_impl_fs"]
 default_impl_cpupool = ["futures-cpupool", "default_impl_any"]
 default_impl_fs = ["default_impl_any"]
-default_impl_vfs = ["default_impl_any"]
 default_impl_any = []
 
 traceing = [ "mail-codec-core/traceing", "mail-codec-headers/traceing" ]

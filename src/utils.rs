@@ -1,4 +1,5 @@
 use std::marker::Send;
+use std::fmt::Debug;
 
 use chrono;
 use futures::Future;
@@ -8,6 +9,17 @@ pub type SendBoxFuture<I, E> = Box<Future<Item=I, Error=E>+Send>;
 pub fn now() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now()
 }
+
+pub trait ConstSwitch: Debug + Copy + Send + Sync + 'static {
+    const ENABLED: bool;
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct Enabled;
+impl ConstSwitch for Enabled { const ENABLED: bool = true; }
+#[derive(Debug, Copy, Clone)]
+pub struct Disabled;
+impl ConstSwitch for Disabled { const ENABLED: bool = false; }
 
 
 #[cfg(test)]

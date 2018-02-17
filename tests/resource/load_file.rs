@@ -1,42 +1,38 @@
 use std::path::Path;
+use std::env;
 
-use futures::{Future, future};
+use futures::Future;
 
 use mail_codec::file_buffer::FileBuffer;
 use mail_codec::{
     MediaType,
-    Resource, ResourceSpec, ResourceState,
+    Resource,
+    IRI,
+    Source,
+    ResourceStateInfo
 };
 use mail_codec::context::CompositeBuilderContext;
-use mail_codec::default_impl::{ FSFileLoader, simple_cpu_pool };
-
-macro_rules! context {
-    () => ({
-        use std::env;
-        CompositeBuilderContext::new(
-            FSFileLoader::new(
-                env::current_dir().unwrap()
-                    .join(Path::new("./tests/test-resources/"))
-            ),
-            simple_cpu_pool()
-        )
-    });
-}
+use mail_codec::default_impl::{FsResourceLoader, simple_cpu_pool };
 
 fn loaded_resource(path: &str, media_type: &str, name: Option<&str>) -> Resource {
-    let spec = ResourceSpec {
-        path: Path::new(path).to_owned(),
-        media_type: MediaType::parse(media_type).unwrap(),
-        name: name.map(|s|s.to_owned()),
+    let resource_loader: FsResourceLoader = FsResourceLoader::new(
+        env::current_dir().unwrap().join(Path::new("./test_resources/"))
+    );
+    let ctx = CompositeBuilderContext::new(resource_loader, simple_cpu_pool());
+
+
+    let source = Source {
+        iri: IRI::from_parts("path", path).unwrap(),
+        use_media_type: Some(MediaType::parse(media_type).unwrap()),
+        use_name: name.map(|s|s.to_owned()),
     };
-    let mut resource = Resource::from_spec(spec);
-    let ctx = context!();
+    let mut resource = Resource::new(source);
 
-    future::poll_fn(|| {
-        resource.poll_encoding_completion(&ctx)
-    }).wait().unwrap();
 
-    assert_eq!(resource.state(), ResourceState::EncodedFileBuffer);
+
+    resource.as_future(&ctx).wait().unwrap();
+
+    assert_eq!(resource.state_info(), ResourceStateInfo::Loaded);
     resource
 }
 

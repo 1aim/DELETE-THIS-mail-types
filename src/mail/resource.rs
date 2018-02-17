@@ -1,34 +1,27 @@
 use std::marker::PhantomData;
-use std::path::PathBuf;
 use std::fmt;
 use std::sync::{ Arc, RwLock, RwLockWriteGuard, RwLockReadGuard };
 use std::ops::Deref;
 use std::mem;
-use std::borrow::Cow;
 
 use futures::{  Future, Poll, Async };
 
 use core::error::{Error, Result};
 use core::codec::BodyBuffer;
-use core::utils::FileMeta;
 
-use mheaders::components::{MediaType, TransferEncoding};
+use mheaders::components::TransferEncoding;
 
-
-use utils::{SendBoxFuture, now};
+use utils::SendBoxFuture;
 use file_buffer::{FileBuffer, TransferEncodedFileBuffer};
-use super::context::BuilderContext;
+use super::context::{BuilderContext, Source};
 
 
-/// POD containing the path from which the resource should be loaded as well as mime and name
-/// if no mime is specified, the mime is sniffed if possible
-/// if no name is specified the base name of the path is used
-#[derive( Debug, Clone )]
-pub struct ResourceSpec {
-    pub path: PathBuf,
-    pub media_type: MediaType,
-    pub name: Option<String>
-}
+//TODO as resources now can be unloaded I need to have some form of handle which
+//     assures that between loading and using a resource it's not unloaded
+//TODO as resources can be shared between threads it's possible to load it in two places
+//     currently this means it's possible that two threads whill interchangably call load
+//     which might not be the best idea. Consider taking advantage of the Lock and moving
+//     it into the Future of as_future or so
 
 #[derive(Debug)]
 pub struct ResourceFutureRef<'a, C: 'a> {
@@ -38,44 +31,44 @@ pub struct ResourceFutureRef<'a, C: 'a> {
 
 #[derive( Debug, Clone )]
 pub struct Resource {
+    //TODO change to Arc<Inner> with Inner { source: Source, state: RwLock<State> }
+    // using inner.source(), inner.state_mut()-> Lock, inner.state() -> Lock
     inner: Arc<RwLock<ResourceInner>>,
     preferred_encoding: Option<TransferEncoding>
 }
 
-#[derive(Debug, Eq, PartialEq, Hash, Clone, Copy)]
-pub enum ResourceState {
-    HasSpec,
-    LoadingFileBuffer,
-    LoadedFileBuffer,
-    EncodingFileBuffer,
-    EncodedFileBuffer,
-    HadError
+#[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
+pub enum ResourceStateInfo {
+    /// The resource is not loaded, but can be loaded at this state
+    /// can only be reached if the Resource has a source
+    NotLoaded,
+    //TODO loading does not differ btween from FileBuffer but not actually in the process of
+    //     beeing loaded and actually loaded
+    /// The resource is in a state between `NotLoaded` and `Loaded`
+    Loading,
+    /// The resource is completely loaded (and content transfer encoded) and
+    /// can be used, as long as it is not unloaded.
+    Loaded,
+    /// Loading the resource failed due to a error, if the resource has a `Source`
+    /// `Resource.try_unload` can be used to transform it back into the `NotLoaded` state.
+    Failed
 }
 
-enum ResourceInner {
-    Spec( ResourceSpec ),
+
+#[derive(Debug)]
+struct ResourceInner {
+    //CONSTRAINT: assert!(state.is_loaded() || source.is_some())
+    state: ResourceState,
+    source: Option<Source>,
+}
+
+enum ResourceState {
+    NotLoaded,
     LoadingBuffer( SendBoxFuture<FileBuffer, Error> ),
     Loaded( FileBuffer ),
     EncodingBuffer( SendBoxFuture<TransferEncodedFileBuffer, Error> ),
     TransferEncoded( TransferEncodedFileBuffer ),
     Failed
-}
-
-impl ResourceInner {
-
-    fn state(&self) -> ResourceState {
-        use self::ResourceInner::*;
-        use self::ResourceState::*;
-        match *self {
-            Spec(..) => HasSpec,
-            LoadingBuffer(..) => LoadingFileBuffer,
-            Loaded(..) => LoadedFileBuffer,
-            EncodingBuffer(..) => EncodingFileBuffer,
-            TransferEncoded(..) => EncodedFileBuffer,
-            Failed => HadError
-        }
-    }
-
 }
 
 pub struct Guard<'lock> {
@@ -96,42 +89,42 @@ pub struct Guard<'lock> {
 
 impl Resource {
 
-    pub fn from_text(text: String ) -> Self {
-        //UNWRAP_SAFE: this is a valid mime, if not this will be coucht by the tests
-        let content_type = MediaType::parse("text/plain;charset=utf8").unwrap();
-        let buf = FileBuffer::new( content_type, text.into_bytes() );
-        Resource::from_buffer( buf )
+    fn _new(state: ResourceState, source: Option<Source>) -> Self {
+        debug_assert!(state.state_info() != ResourceStateInfo::NotLoaded || source.is_some());
+        Resource {
+            inner: Arc::new( RwLock::new( ResourceInner {
+                state, source,
+            } ) ),
+            preferred_encoding: None
+        }
     }
 
-    #[inline]
-    pub fn from_spec( spec: ResourceSpec ) -> Self {
-        Self::new_inner( ResourceInner::Spec( spec ) )
+    pub fn new(source: Source) -> Self {
+        Resource::_new(ResourceState::NotLoaded, Some(source))
     }
 
-    #[inline]
-    pub fn from_buffer( buffer: FileBuffer ) -> Self {
-        Self::new_inner( ResourceInner::Loaded( buffer ) )
+    /// This constructor allow crating a Resource from a FileBuffer without providing a source IRI
+    ///
+    /// This is useful in combination with e.g. "on-the-fly" generated resources. A Resource
+    /// created this way can not be unloaded, as such this preferably should only be used with
+    /// "one-use" resources which do not need to be cached.
+    pub fn sourceless_from_buffer( buffer: FileBuffer ) -> Self {
+        Self::_new( ResourceState::Loaded( buffer ), None )
     }
 
-    #[inline]
-    pub fn from_future( fut: SendBoxFuture<FileBuffer, Error> ) -> Self {
-        Self::new_inner( ResourceInner::LoadingBuffer( fut ) )
+    /// This constructor allow crating a Resource from a Future resolving to a FileBuffer
+    /// without providing a source IRI
+    ///
+    /// This is useful in combination with e.g. "on-the-fly" generated resources. A Resource
+    /// created this way can not be unloaded, as such this preferably should only be used with
+    /// "one-use" resources which do not need to be cached.
+    pub fn sourceless_from_future( fut: SendBoxFuture<FileBuffer, Error> ) -> Self {
+        Self::_new( ResourceState::LoadingBuffer( fut ), None )
     }
 
-    #[inline]
-    pub fn from_encoded_buffer( buffer: TransferEncodedFileBuffer ) -> Self {
-        Self::new_inner( ResourceInner::TransferEncoded( buffer ) )
-    }
 
-    #[inline]
-    pub fn from_future_encoded( fut: SendBoxFuture<TransferEncodedFileBuffer, Error> ) -> Self {
-        Self::new_inner( ResourceInner::EncodingBuffer( fut ) )
-    }
-
-    pub fn state(&self) -> ResourceState {
-        self.read_inner()
-            .map(|inner| inner.state())
-            .unwrap_or(ResourceState::HadError)
+    pub fn state_info(&self) -> ResourceStateInfo {
+        self.read_inner().state.state_info()
     }
 
     pub fn set_preferred_encoding( &mut self, tenc: TransferEncoding ) {
@@ -142,31 +135,46 @@ impl Resource {
         self.preferred_encoding.as_ref()
     }
 
-    fn new_inner( r: ResourceInner ) -> Self {
-        Resource {
-            inner: Arc::new( RwLock::new( r ) ),
-            preferred_encoding: None
-        }
-    }
 
-    fn read_inner( &self ) -> Result<RwLockReadGuard<ResourceInner>> {
+
+    fn read_inner( &self ) -> RwLockReadGuard<ResourceInner> {
         match self.inner.read() {
-            Ok( guard ) => Ok( guard ),
-            Err( .. ) => bail!( "[BUG] lock was poisoned" )
+            Ok( guard ) => guard,
+            Err( poisoned ) => {
+                // we already have our own form of poisoning with mem-replacing state with Failed
+                // during the any mutating operation which can panic (which currently only is poll)
+                let guard = poisoned.into_inner();
+                guard
+            }
         }
     }
 
-    fn write_inner( &self ) -> Result<RwLockWriteGuard<ResourceInner>> {
+    /// # Unwindsafty
+    ///
+    /// This method accesses the inner lock regardless of
+    /// poisoning the reason why this is fine is that all
+    /// operations which modify the guarded value _and_ can
+    /// panic do have their own form of poisoning. Currently
+    /// this is just `poll_encoding_completion` which does
+    /// modify the inner `stat` and uses `Failed` as a form
+    /// of poison state. **Any usecase which can panic needs
+    /// to make sure it's unwind safe _without lock poisoning_**
+    fn write_inner( &self ) -> RwLockWriteGuard<ResourceInner> {
         match self.inner.write() {
-            Ok( guard ) => Ok( guard ),
-            Err( .. ) => bail!( "[BUG] lock was poisoned" )
+            Ok( guard ) => guard,
+            Err( poisoned ) => {
+                // we already have our own form of poisoning with mem-replacing state with Failed
+                // during the any mutating operation which can panic (which currently only is poll)
+                let guard = poisoned.into_inner();
+                guard
+            }
         }
     }
 
     pub fn get_if_encoded( &self ) -> Result<Option<Guard>> {
-        use self::ResourceInner::*;
-        let inner = self.read_inner()?;
-        let ptr = match *inner {
+        use self::ResourceState::*;
+        let inner = self.read_inner();
+        let ptr = match inner.state {
             TransferEncoded( ref encoded )  => Some( encoded as *const TransferEncodedFileBuffer ),
             _ => None
         };
@@ -185,25 +193,68 @@ impl Resource {
         }
     }
 
+    /// Tries to transform the resource into a state where it is not loaded.
+    ///
+    /// This requires the resource to have a source.
+    ///
+    /// This was designed this way as `try_unload` is mainly meant to bee a function
+    /// to free some memory in a cache or `Resources` NOT as a tool to enforce a resource
+    /// is not loade. Due to the shared nature of resources it is possible that e.g.
+    /// between a call to `try_unload` and a imediatly following call to `state_info` the
+    /// resource was already loaded again (or is in the process of). As such a call to
+    /// `try_unload` should **only be done once in a while and never in any form of loop**
+    /// or else it is possible that one thread load the resource to make sure its aviable
+    /// when it needs it while the other thread continuously unloads it.
+    ///
+    /// # Error
+    /// an error occurs if the resource can not be changed into a
+    /// state where it is not loaded. This can only happen if
+    /// `try_unload` is used on a `Resource` which has no `Source`.
+    ///
+    pub fn try_unload(&self) -> Result<()> {
+        let mut inner = self.write_inner();
+        if inner.source.is_some() {
+            inner.state = ResourceState::NotLoaded;
+            Ok(())
+        } else {
+            //TODO typed error
+            return Err("can not unload sourceless resource".into())
+        }
+    }
+
+    /// true, if the `Resource` has a `Source` and therefore can be unloaded
+    ///
+    /// It is also true if the resource is corupted and therefore already not in
+    /// a loaded state.
+    pub fn can_be_unloaded(&self) -> bool {
+        self.read_inner().source.is_some()
+    }
+
     pub fn poll_encoding_completion<C>( &mut self, ctx: &C ) -> Poll<(), Error>
         where C: BuilderContext
     {
-        let mut inner = self.write_inner()?;
-        let moved_out = mem::replace( &mut *inner, ResourceInner::Failed );
+        let mut inner = self.write_inner();
+        //TODO this already works like poisoning so we don't really need the lock poisoning
+        //  Solutions:
+        //     a) use parking lot it's faster and does not implement lock poisoning
+        //     b) have a catch + resume unwind handle which releses the lock before resuming
+        //     c) [for now] if write_inner stumbles across poison it will
+        let moved_out = mem::replace(&mut inner.state, ResourceState::Failed );
         let (move_back_in, state) =
-            Resource::_poll_encoding_completion( moved_out, ctx, &self.preferred_encoding )?;
-        mem::replace( &mut *inner, move_back_in );
+            Resource::_poll_encoding_completion( moved_out, inner.source.as_ref(), ctx, &self.preferred_encoding )?;
+        mem::replace( &mut inner.state, move_back_in );
         Ok( state )
     }
 
     fn _poll_encoding_completion<C>(
-        resource: ResourceInner,
+        resource: ResourceState,
+        source: Option<&Source>,
         ctx: &C,
         pref_enc: &Option<TransferEncoding>
-    ) -> Result<(ResourceInner, Async<()>)>
+    ) -> Result<(ResourceState, Async<()>)>
         where C: BuilderContext
     {
-        use self::ResourceInner::*;
+        use self::ResourceState::*;
         let mut continue_with = resource;
         // NOTE(why the loop):
         // we only return if we polled on a contained future and it resulted in
@@ -218,30 +269,15 @@ impl Resource {
         // but using a loop here should be better.
         loop {
             continue_with = match continue_with {
-                Spec(spec) => {
-                    let ResourceSpec { path, media_type, name } = spec;
-                    //try finding a default name
-                    let name = name.or_else(
-                        || path.file_name()
-                            .map(|name| name.to_string_lossy().into_owned())
-                    );
+                NotLoaded => {
+                    let source: &Source = source
+                        .ok_or_else(|| -> Error {
+                            //TODO typed error
+                            "[BUG] illegal state no source and not loaded".into()
+                        })?;
 
                     LoadingBuffer(
-                        ctx.execute(
-                            ctx.load_file( Cow::Owned( path ) )
-                                .and_then(move |bytes| {
-                                    //FEAT: some post processing/loading hook
-                                    // +/ sniff media type hook usage
-                                    // +/ verify media type hook usage
-                                    //use now as read date
-                                    let meta = FileMeta {
-                                        file_name: name,
-                                        read_date: Some(now()),
-                                        ..Default::default()
-                                    };
-                                    Ok(FileBuffer::new_with_file_meta(media_type, bytes, meta))
-                                })
-                        )
+                        ctx.load_resource(source)
                     )
                 },
 
@@ -256,7 +292,7 @@ impl Resource {
 
                 Loaded(buf) => {
                     let pe = pref_enc.clone();
-                    EncodingBuffer( ctx.execute_fn(move || {
+                    EncodingBuffer( ctx.offload_fn(move || {
                         TransferEncodedFileBuffer::encode_buffer(buf, pe.as_ref())
                     } ) )
                 },
@@ -275,20 +311,12 @@ impl Resource {
                 },
 
                 Failed => {
+                    //TODO typed error
                     bail!( "failed already in previous poll" );
                 }
             }
         }
     }
-
-
-    /// mainly for testing
-    pub fn empty_text() -> Self {
-        //OPTIMIZE use const MediaType once aviable
-        let text_plain = MediaType::new("text","plain").unwrap();
-        Resource::from_buffer( FileBuffer::new( text_plain, Vec::new() ) )
-    }
-
 }
 
 
@@ -304,20 +332,32 @@ impl<'a, C: 'a> Future for ResourceFutureRef<'a, C>
 }
 
 
-impl fmt::Debug for ResourceInner {
+impl fmt::Debug for ResourceState {
     fn fmt( &self, fter: &mut fmt::Formatter ) -> fmt::Result {
-        use self::ResourceInner::*;
+        use self::ResourceState::*;
         match *self {
-            Spec( ref spec ) => <ResourceSpec as fmt::Debug>::fmt( spec, fter ),
-            LoadingBuffer( .. ) => write!( fter, "LoadingBuffer( future )" ),
+            NotLoaded => write!(fter, "NotLoaded"),
+            LoadingBuffer( .. ) => write!( fter, "LoadingBuffer( <future> )" ),
             Loaded( ref buf ) => <FileBuffer as fmt::Debug>::fmt( buf, fter ),
-            EncodingBuffer( .. ) => write!( fter, "EncodingBuffer( future )" ),
+            EncodingBuffer( .. ) => write!( fter, "EncodingBuffer( <future> )" ),
             TransferEncoded( ref buf ) => <TransferEncodedFileBuffer as fmt::Debug>::fmt( buf, fter ),
             Failed => write!( fter, "Failed" )
         }
     }
 }
 
+impl ResourceState {
+
+    fn state_info(&self) -> ResourceStateInfo {
+        use self::ResourceState::*;
+        match *self {
+            NotLoaded => ResourceStateInfo::NotLoaded,
+            TransferEncoded(..) => ResourceStateInfo::Loaded,
+            Failed => ResourceStateInfo::Failed,
+            _ => ResourceStateInfo::Loading
+        }
+    }
+}
 
 impl<'a> Deref for Guard<'a> {
     type Target = TransferEncodedFileBuffer;
@@ -347,20 +387,20 @@ impl BodyBuffer for Resource {
 
 #[cfg(test)]
 mod test {
+    use std::path::{Path, PathBuf};
     use std::fmt::Debug;
+
     use futures::Future;
     use futures::future::Either;
 
-    use futures_cpupool::CpuPool;
+    use ::{IRI, MediaType};
 
     use super::*;
 
-    use context::CompositeBuilderContext;
-    use default_impl::{VFSFileLoader, simple_cpu_pool};
+    use default_impl::test_context;
 
     use utils::timeout;
 
-    type SimpleContext = CompositeBuilderContext<VFSFileLoader, CpuPool>;
 
     fn resolve_resource<C: BuilderContext+Debug>( resource: &mut Resource, ctx: &C ) {
         let res = resource
@@ -377,19 +417,27 @@ mod test {
         }
     }
 
+    fn load_file<P: AsRef<Path>>(path: P) -> Vec<u8> {
+        use std::io::Read;
+        use std::fs::File;
+        let mut file = File::open(path).unwrap();
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer).unwrap();
+        buffer
+    }
+
     #[test]
     fn load_test() {
-        let mut fload = VFSFileLoader::new();
-        fload.register_file( "/test/me.yes", b"abc def!".to_vec() ).unwrap();
-        let ctx = SimpleContext::new(fload, simple_cpu_pool() );
-
-        let spec = ResourceSpec {
-            path: "/test/me.yes".into(),
-            media_type: MediaType::parse("text/plain;charset=us-ascii").unwrap(),
-            name: None
+        let ctx = test_context();
+        let iri = IRI::from_parts("path", "./test_resources/text.txt").unwrap();
+        let path = PathBuf::from(iri.tail());
+        let source = Source {
+            iri,
+            use_media_type: Some(MediaType::parse("text/plain; charset=utf-8").unwrap()),
+            use_name: None
         };
 
-        let mut resource = Resource::from_spec( spec );
+        let mut resource = Resource::new( source );
 
         assert_eq!( false, resource.get_if_encoded().unwrap().is_some() );
 
@@ -397,47 +445,35 @@ mod test {
 
         let res = resource.get_if_encoded().unwrap().unwrap();
         let enc_buf: &TransferEncodedFileBuffer = &*res;
-        let data: &[u8] = &*enc_buf;
-        
-        assert_eq!( b"abc def!", data );
+        let expected = load_file(path);
+        assert_eq!( enc_buf.as_slice() , expected.as_slice());
     }
 
 
-    #[test]
-    fn load_test_utf8() {
-        let mut fload = VFSFileLoader::new();
-        fload.register_file( "/test/me.yes", "Öse".as_bytes().to_vec() ).unwrap();
-        let ctx = SimpleContext::new(fload, simple_cpu_pool() );
-
-        let spec = ResourceSpec {
-            path: "/test/me.yes".into(),
-            media_type: MediaType::parse("text/plain;charset=utf8").unwrap(),
-            name: None,
-        };
-
-        let mut resource = Resource::from_spec( spec );
-
-        assert_eq!( false, resource.get_if_encoded().unwrap().is_some() );
-
-        resolve_resource( &mut resource, &ctx );
-
-        let res = resource.get_if_encoded().unwrap().unwrap();
-        let enc_buf: &TransferEncodedFileBuffer = &*res;
-        let data: &[u8] = &*enc_buf;
-
-        assert_eq!( b"=C3=96se", data );
-    }
-
-
-    #[test]
-    fn from_text_works() {
-        let mut resource = Resource::from_text( "orange juice".into() );
-        resolve_resource( &mut resource, &SimpleContext::new(VFSFileLoader::new(), simple_cpu_pool() ) );
-        let res = resource.get_if_encoded().unwrap().unwrap();
-        let data: &[u8] = &*res;
-        assert_eq!( b"orange juice", data );
-    }
-
+//    #[test]
+//    fn load_test_utf8() {
+//        let mut fload = VFSFileLoader::new();
+//        fload.register_file( "/test/me.yes", "Öse".as_bytes().to_vec() ).unwrap();
+//        let ctx = SimpleContext::new(fload, simple_cpu_pool() );
+//
+//        let spec = Source {
+//            iri: "/test/me.yes".into(),
+//            use_media_type: MediaType::parse("text/plain;charset=utf8").unwrap(),
+//            use_name: None,
+//        };
+//
+//        let mut resource = Resource::from_spec( spec );
+//
+//        assert_eq!( false, resource.get_if_encoded().unwrap().is_some() );
+//
+//        resolve_resource( &mut resource, &ctx );
+//
+//        let res = resource.get_if_encoded().unwrap().unwrap();
+//        let enc_buf: &TransferEncodedFileBuffer = &*res;
+//        let data: &[u8] = &*enc_buf;
+//
+//        assert_eq!( b"=C3=96se", data );
+//    }
 
 
 

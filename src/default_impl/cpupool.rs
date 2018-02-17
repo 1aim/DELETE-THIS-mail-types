@@ -4,15 +4,15 @@ use utils::SendBoxFuture;
 
 use futures_cpupool::{ CpuPool, Builder};
 
-use context::RunElsewhere;
+use context::OffloaderComponent;
 
 pub fn simple_cpu_pool() -> CpuPool {
     Builder::new().create()
 }
 
-impl RunElsewhere for CpuPool {
+impl OffloaderComponent for CpuPool {
     /// executes the futures `fut` "elswhere" e.g. in a cpu pool
-    fn execute<F>( &self, fut: F) -> SendBoxFuture<F::Item, F::Error>
+    fn offload<F>(&self, fut: F) -> SendBoxFuture<F::Item, F::Error>
         where F: Future + Send + 'static,
               F::Item: Send+'static,
               F::Error: Send+'static
@@ -24,8 +24,9 @@ impl RunElsewhere for CpuPool {
 
 #[cfg(test)]
 mod test {
+    use futures::future;
     use futures_cpupool::Builder;
-    use core::error::*;
+    use core::error::Result;
     use super::*;
 
     #[test]
@@ -34,8 +35,8 @@ mod test {
         _check_if_it_works( pool )
     }
 
-    fn _check_if_it_works<R: RunElsewhere>(r: R) {
-        let res = r.execute_fn( ||-> Result<u32> { Ok( 33u32 ) } ).wait();
+    fn _check_if_it_works<R: OffloaderComponent>(r: R) {
+        let res = r.offload(future::lazy(||-> Result<u32> { Ok(33u32) } )).wait();
         let val = assert_ok!( res );
         assert_eq!( 33u32, val );
     }

@@ -285,22 +285,32 @@ impl fmt::Debug for EncodableMail {
 
 #[cfg(test)]
 mod test {
+    use ::MediaType;
+    use ::file_buffer::FileBuffer;
+    use ::Resource;
+
+    fn resource_from_text<I: Into<String>>(text: I) -> Resource {
+        let text: String = text.into();
+        let mt = MediaType::parse("text/plain; charset=utf-8").unwrap();
+        let fb = FileBuffer::new(mt, text.into());
+        Resource::sourceless_from_buffer(fb)
+    }
 
     mod Mail {
         #![allow(non_snake_case)]
-        use super::super::*;
+        use std::str;
         use mheaders::components::TransferEncoding;
         use mheaders::{
             Subject, Comments
         };
-        use futures::future;
-        use std::str;
+        use default_impl::test_context;
+        use super::super::*;
+        use super::resource_from_text;
 
         fn load_blocking<C>(r: &mut Resource, ctx: &C)
             where C: BuilderContext
         {
-            let fut = future::poll_fn(|| r.poll_encoding_completion(ctx));
-            fut.wait().unwrap();
+            r.as_future(ctx).wait().unwrap();
         }
 
         #[test]
@@ -316,13 +326,13 @@ mod test {
                                     Mail {
                                         headers: HeaderMap::new(),
                                         body: MailPart::SingleBody {
-                                            body: Resource::from_text("r1".into())
+                                            body: resource_from_text("r1")
                                         }
                                     },
                                     Mail {
                                         headers: HeaderMap::new(),
                                         body: MailPart::SingleBody {
-                                            body: Resource::from_text("r2".into())
+                                            body: resource_from_text("r2")
                                         }
                                     }
                                 ],
@@ -332,7 +342,7 @@ mod test {
                         Mail {
                             headers: HeaderMap::new(),
                             body: MailPart::SingleBody {
-                                body: Resource::from_text("r3".into())
+                                body: resource_from_text("r3")
                             }
                         }
 
@@ -341,7 +351,7 @@ mod test {
                 }
             };
 
-            let ctx = ::default_impl::SimpleBuilderContext::new();
+            let ctx = test_context();
             let mut body_count = 0;
             mail.walk_mail_bodies_mut(&mut |body: &mut Resource| {
                 body_count += 1;
@@ -359,7 +369,7 @@ mod test {
             let mut mail = Mail {
                 headers: HeaderMap::new(),
                 body: MailPart::SingleBody {
-                    body: Resource::from_text("r0".into()),
+                    body: resource_from_text("r0"),
                 }
             };
             assert_ok!(mail.walk_mail_bodies_mut(&mut |_| { Ok(()) }));
@@ -371,7 +381,7 @@ mod test {
             let mut mail = Mail {
                 headers: HeaderMap::new(),
                 body: MailPart::SingleBody {
-                    body: Resource::from_text("r0".into()),
+                    body: resource_from_text("r0"),
                 }
             };
 
@@ -387,7 +397,7 @@ mod test {
             let mut mail = Mail {
                 headers: HeaderMap::new(),
                 body: MailPart::SingleBody {
-                    body: Resource::from_text("r0".into()),
+                    body: resource_from_text("r0"),
                 }
             };
             assert_ok!(mail.set_header(Subject, "hy"));
@@ -399,7 +409,7 @@ mod test {
             let mut mail = Mail {
                 headers: HeaderMap::new(),
                 body: MailPart::SingleBody {
-                    body: Resource::from_text("r0".into()),
+                    body: resource_from_text("r0"),
                 }
             };
             assert_err!(mail.set_headers(headers! {
@@ -412,7 +422,7 @@ mod test {
             let mut mail = Mail {
                 headers: HeaderMap::new(),
                 body: MailPart::SingleBody {
-                    body: Resource::from_text("r0".into()),
+                    body: resource_from_text("r0"),
                 }
             };
             assert_ok!(mail.set_headers(headers! {
@@ -428,7 +438,6 @@ mod test {
 
     mod EncodableMail {
         #![allow(non_snake_case)]
-        use super::super::*;
         use chrono::{Utc, TimeZone};
         use mheaders::components::{
             TransferEncoding,
@@ -438,10 +447,13 @@ mod test {
             From, ContentType, ContentTransferEncoding,
             Date, Subject
         };
+        use default_impl::test_context;
+        use super::super::*;
+        use super::resource_from_text;
 
         #[test]
         fn sets_generated_headers_for_outer_mail() {
-            let mut resource = Resource::from_text("r9".into());
+            let mut resource = resource_from_text("r9");
             resource.set_preferred_encoding(TransferEncoding::Base64);
             let mail = Mail {
                 headers: headers!{
@@ -451,7 +463,7 @@ mod test {
                 body: MailPart::SingleBody { body: resource }
             };
 
-            let ctx = ::default_impl::SimpleBuilderContext::new();
+            let ctx = test_context();
             let enc_mail = assert_ok!(mail.into_encodeable_mail(&ctx).wait());
 
             let headers: &HeaderMap = enc_mail.headers();
@@ -465,7 +477,7 @@ mod test {
                 .unwrap()
                 .unwrap();
 
-            assert_eq!(res.as_str_repr(), "text/plain;charset=utf8");
+            assert_eq!(res.as_str_repr(), "text/plain; charset=utf-8");
 
             let res = headers.get_single(ContentTransferEncoding)
                 .unwrap()
@@ -476,7 +488,7 @@ mod test {
 
         #[test]
         fn sets_generated_headers_for_sub_mails() {
-            let mut resource = Resource::from_text("r9".into());
+            let mut resource = resource_from_text("r9");
             resource.set_preferred_encoding(TransferEncoding::Base64);
             let mail = Mail {
                 headers: headers!{
@@ -495,7 +507,7 @@ mod test {
                 }
             };
 
-            let ctx = ::default_impl::SimpleBuilderContext::new();
+            let ctx = test_context();
             let mail = mail.into_encodeable_mail(&ctx).wait().unwrap();
 
             assert!(mail.headers().contains(From));
@@ -512,7 +524,7 @@ mod test {
                     .unwrap()
                     .unwrap();
 
-                assert_eq!(res.as_str_repr(), "text/plain;charset=utf8");
+                assert_eq!(res.as_str_repr(), "text/plain; charset=utf-8");
 
                 let res = headers.get_single(ContentTransferEncoding)
                     .unwrap()
@@ -532,10 +544,10 @@ mod test {
                     From: ["random@this.is.no.mail", "u.p.s@s.p.u"],
                     Subject: "hoho"
                 }.unwrap(),
-                body: MailPart::SingleBody { body: Resource::from_text("r9".into()) }
+                body: MailPart::SingleBody { body: resource_from_text("r9") }
             };
 
-            let ctx = ::default_impl::SimpleBuilderContext::new();
+            let ctx = test_context();
             assert_err!(mail.into_encodeable_mail(&ctx).wait());
         }
 
@@ -545,10 +557,10 @@ mod test {
                 headers: headers!{
                     Subject: "hoho"
                 }.unwrap(),
-                body: MailPart::SingleBody { body: Resource::from_text("r9".into()) }
+                body: MailPart::SingleBody { body: resource_from_text("r9") }
             };
 
-            let ctx = ::default_impl::SimpleBuilderContext::new();
+            let ctx = test_context();
             assert_err!(mail.into_encodeable_mail(&ctx).wait());
         }
 
@@ -561,10 +573,10 @@ mod test {
                     Subject: "hoho",
                     Date: DateTime::new(provided_date.clone())
                 }.unwrap(),
-                body: MailPart::SingleBody { body: Resource::from_text("r9".into()) }
+                body: MailPart::SingleBody { body: resource_from_text("r9") }
             };
 
-            let ctx = ::default_impl::SimpleBuilderContext::new();
+            let ctx = test_context();
             let enc_mail = assert_ok!(mail.into_encodeable_mail(&ctx).wait());
             let used_date = enc_mail.headers()
                 .get_single(Date)

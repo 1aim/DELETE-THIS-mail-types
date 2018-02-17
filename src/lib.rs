@@ -32,12 +32,13 @@ pub mod mail;
 pub mod file_buffer;
 pub mod mime;
 mod iri;
-pub use self::iri::IRI;
 
 #[cfg(feature="default_impl_any")]
 pub mod default_impl;
 
+pub use self::iri::IRI;
 pub use self::mail::*;
+pub use ::context::Source;
 
 pub mod headers {
     pub use mheaders::*;
