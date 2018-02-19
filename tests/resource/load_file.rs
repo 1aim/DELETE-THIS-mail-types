@@ -26,11 +26,9 @@ fn loaded_resource(path: &str, media_type: &str, name: Option<&str>) -> Resource
         use_media_type: Some(MediaType::parse(media_type).unwrap()),
         use_name: name.map(|s|s.to_owned()),
     };
-    let mut resource = Resource::new(source);
+    let resource = Resource::new(source);
 
-
-
-    resource.as_future(&ctx).wait().unwrap();
+    resource.create_loading_future(ctx).wait().unwrap();
 
     assert_eq!(resource.state_info(), ResourceStateInfo::Loaded);
     resource
@@ -43,7 +41,6 @@ fn get_name_from_path() {
         loaded_resource("img.png", "image/png", None);
 
     let tenc_buffer = resource.get_if_encoded()
-        .expect("no problems witht the lock")
         .expect("it to be encoded");
 
     let fbuf: &FileBuffer  = &**tenc_buffer;
@@ -57,7 +54,6 @@ fn use_name_is_used() {
         loaded_resource("img.png", "image/png", Some("That Image"));
 
     let tenc_buffer = resource.get_if_encoded()
-        .expect("no problems witht the lock")
         .expect("it to be encoded");
 
     let fbuf: &FileBuffer  = &**tenc_buffer;

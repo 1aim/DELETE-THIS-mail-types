@@ -10,6 +10,7 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 extern crate mime as media_type;
+#[macro_use]
 extern crate futures;
 extern crate rand;
 extern crate soft_ascii_string;
@@ -17,7 +18,6 @@ extern crate total_order_multi_map;
 extern crate tree_magic;
 extern crate chrono;
 extern crate vec1;
-
 
 
 
