@@ -453,8 +453,7 @@ mod test {
 
         #[test]
         fn sets_generated_headers_for_outer_mail() {
-            let mut resource = resource_from_text("r9");
-            resource.set_preferred_encoding(TransferEncoding::Base64);
+            let resource = resource_from_text("r9");
             let mail = Mail {
                 headers: headers!{
                     From: ["random@this.is.no.mail"],
@@ -483,13 +482,12 @@ mod test {
                 .unwrap()
                 .unwrap();
 
-            assert_eq!(res, &TransferEncoding::Base64);
+            assert_eq!(res, &TransferEncoding::QuotedPrintable);
         }
 
         #[test]
         fn sets_generated_headers_for_sub_mails() {
-            let mut resource = resource_from_text("r9");
-            resource.set_preferred_encoding(TransferEncoding::Base64);
+            let resource = resource_from_text("r9");
             let mail = Mail {
                 headers: headers!{
                     From: ["random@this.is.no.mail"],
@@ -530,7 +528,7 @@ mod test {
                     .unwrap()
                     .unwrap();
 
-                assert_eq!(res, &TransferEncoding::Base64);
+                assert_eq!(res, &TransferEncoding::QuotedPrintable);
 
             } else {
                 unreachable!()

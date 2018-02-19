@@ -9,8 +9,6 @@ use futures::{  Future, Poll, Async };
 use core::error::{Error, Result};
 use core::codec::BodyBuffer;
 
-use mheaders::components::TransferEncoding;
-
 use utils::SendBoxFuture;
 use file_buffer::{FileBuffer, TransferEncodedFileBuffer};
 use super::context::{BuilderContext, Source};
@@ -18,7 +16,7 @@ use super::context::{BuilderContext, Source};
 
 //TODO as resources now can be unloaded I need to have some form of handle which
 //     assures that between loading and using a resource it's not unloaded
-//TODO as resources can be shared between threads it's possible to load it in two places
+//TODO as resources can be shared between threads it's possible to load it in two places at once
 //     currently this means it's possible that two threads whill interchangably call load
 //     which might not be the best idea. Consider taking advantage of the Lock and moving
 //     it into the Future of as_future or so
@@ -34,7 +32,6 @@ pub struct Resource {
     //TODO change to Arc<Inner> with Inner { source: Source, state: RwLock<State> }
     // using inner.source(), inner.state_mut()-> Lock, inner.state() -> Lock
     inner: Arc<ResourceInner>,
-    preferred_encoding: Option<TransferEncoding>
 }
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone, Hash)]
@@ -96,7 +93,6 @@ impl Resource {
                 source,
                 state: RwLock::new(state)
             }),
-            preferred_encoding: None
         }
     }
 
@@ -128,14 +124,6 @@ impl Resource {
         self.inner.state().state_info()
     }
 
-    pub fn set_preferred_encoding( &mut self, tenc: TransferEncoding ) {
-        self.preferred_encoding = Some( tenc )
-    }
-
-    pub fn get_preffered_encoding( &self ) -> Option<&TransferEncoding> {
-        self.preferred_encoding.as_ref()
-    }
-
 
     pub fn get_if_encoded( &self ) -> Result<Option<Guard>> {
         use self::ResourceState::*;
@@ -152,10 +140,10 @@ impl Resource {
         } ) )
     }
 
-    pub fn as_future<'a, C>( &'a mut self, ctx: &'a C ) -> ResourceFutureRef<'a, C> {
+    pub fn as_future<'a, C>(&'a mut self, ctx: &'a C) -> ResourceFutureRef<'a, C> {
         ResourceFutureRef {
             resource_ref: self,
-            ctx_ref: ctx
+            ctx_ref: ctx,
         }
     }
 
@@ -255,9 +243,8 @@ impl Resource {
                 },
 
                 Loaded(buf) => {
-                    let pref_enc = self.preferred_encoding;
                     EncodingBuffer( ctx.offload_fn(move || {
-                        TransferEncodedFileBuffer::encode_buffer(buf, pref_enc)
+                        TransferEncodedFileBuffer::encode_buffer(buf, None)
                     }))
                 },
 

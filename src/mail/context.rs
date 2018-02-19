@@ -34,6 +34,16 @@ pub struct Source {
     pub use_name: Option<String>
 }
 
+// Future versions could consider allowing non static non clone context
+// making Resource::create_load_future keeping a reference to the resource
+// etc. BUT this is much more of a hassel to work with and to integrate with
+// e.g. tokio/futures
+/// # Clone / Send / Sync
+///
+/// `BuilderContext` are meant to be easily shareable, cloning them should be
+/// sheap, as such if a implementor contains state it might make sense for an
+/// implementor to have a outer+inner type where the inner type is wrapped
+/// into a `Arc` e.g. `struct SomeCtx { inner: Arc<InnerSomeCtx> }`.
 pub trait BuilderContext: Clone + Send + Sync + 'static {
 
     /// returns a Future resolving to a FileBuffer.

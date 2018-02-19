@@ -68,12 +68,10 @@ impl IRI {
 
     fn validate_scheme(scheme: &str) -> Result<(), Error> {
         let mut iter = scheme.bytes();
-        let valid = iter.next().map(|bch|
-            //FIXME use is_ascii_alphabetic once stable
-            bch.is_ascii_alphabetic()).unwrap_or(false)
+        let valid = iter.next()
+            .map(|bch| bch.is_ascii_alphabetic()).unwrap_or(false)
             && iter.all(|bch|
-            //FIXME use is_ascii_alphanumeric once stable
-            bch.is_ascii_alphanumeric() || bch == b'+' || bch == b'-' || bch == b'.');
+                bch.is_ascii_alphanumeric() || bch == b'+' || bch == b'-' || bch == b'.');
 
         if !valid {
             //TODO error type
