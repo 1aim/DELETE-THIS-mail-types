@@ -359,11 +359,12 @@ impl ResourceInner {
     fn _try_unload(&self) -> Result<()> {
         if self.source().is_some() {
             if 0 == self.unload_prevention.load(Ordering::Acquire) {
-                let mut state = self.state_mut();
-                // there might have been a load/unload prevention before we got the lock
-                if 0 == self.unload_prevention.load(Ordering::Acquire) {
-                    *state = ResourceState::NotLoaded;
-                    return Ok(());
+                if let Some(mut state) = self.try_state_mut() {
+                    // there might have been a load/unload prevention before we got the lock
+                    if 0 == self.unload_prevention.load(Ordering::Acquire) {
+                        *state = ResourceState::NotLoaded;
+                        return Ok(());
+                    }
                 }
             }
             //TODO typed error
