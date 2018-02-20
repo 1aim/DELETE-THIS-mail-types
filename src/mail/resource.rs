@@ -554,7 +554,7 @@ impl<C> ResourceLoadingFuture<C>
         match helper.inner.try_state_mut() {
             // can happen if it was already loaded but all AntiUnloadGuard's had been dropped
             None => helper.poll_inner_no_lock(),
-            Some(guard) => helper._poll_inner_with_lock(guard)
+            Some(guard) => helper.poll_inner_with_lock(guard)
         }
     }
 
@@ -594,11 +594,30 @@ impl<'a, C: 'a> MutHelper<'a, C>
         }
     }
 
-    fn _poll_inner_with_lock(self, mut state_guard: RwLockWriteGuard<ResourceState>)
-                             -> Poll<AntiUnloadGuard, Error>
+    /// drive the inner state machinge
+    ///
+    /// This replaces the state with `Failed` then
+    /// uses `state.poll_encoding_completion` to get the new state
+    /// and sets it (and the state info generate from it) due to this
+    /// Even if there is a panic, it will not cause any bad state, the
+    /// state (and state info) will be failed like expected. Because of
+    /// this we do not need to bother about lock poisoning at all.
+    ///
+    fn poll_inner_with_lock(self, mut state_guard: RwLockWriteGuard<ResourceState>)
+                            -> Poll<AntiUnloadGuard, Error>
     {
+        // we only need this for one edge case in which a call to `ResourceLoadingFuture::poll`
+        // did panic but the future was _not_ dropped _and_ there is another `ResourceLoadingFuture`
+        // polling the same resource (or more correctly waiting for it to be done)
+        struct FailInfoOnePanic<'a>(&'a AtomicStateInfo);
+        impl<'a> Drop for FailInfoOnePanic<'a> { fn drop(&mut self) { if ::std::thread::panicking() {
+            self.0.set(ResourceStateInfo::Canceled)
+        }}}
+        FailInfoOnePanic(&self.inner.state_info);
+
         // do our own kind of poisoning 1. because of borrowing 2. for unwind safety/no lock poison
         let moved_out = mem::replace(&mut *state_guard, ResourceState::Failed);
+
 
         let (move_back_in, async_state) =
             moved_out.poll_encoding_completion(&self.inner.source, self.ctx)?;
