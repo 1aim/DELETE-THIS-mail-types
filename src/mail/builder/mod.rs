@@ -75,7 +75,7 @@ impl BuilderShared {
         // 2. store current len befor extending
         // 3. pop until the stored length is reached again
         check_multiple_headers( &headers, is_multipart )?;
-        self.headers.extend( headers )?;
+        self.headers.try_extend( headers )?;
         Ok( () )
     }
 

@@ -211,6 +211,8 @@ FWS -> (un-) foldable whitespace without comments
 
 make sure to not use the outdated versions
 
+RFC7595: Registering URI schemes
+
 
 # Parsing Notes
 
