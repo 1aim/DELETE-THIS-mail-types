@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 use std::fmt;
 use std::sync::{Arc, RwLock, RwLockWriteGuard, RwLockReadGuard};
+use std::result::{Result as StdResult};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::ops::Deref;
 use std::mem;
@@ -302,7 +303,7 @@ impl Resource {
     /// no source. It's ok to only panic in debug mode as this is an private constructor,
     /// the constructors using it have to make sure this constraint is uphold.
     fn _new(state: ResourceState, source: Option<Source>) -> Self {
-        let state_info = state.state_info();
+        let state_info = state.derive_state_info();
         debug_assert!(state_info != ResourceStateInfo::NotLoaded || source.is_some());
         Resource {
             inner: Arc::new(ResourceInner {
@@ -449,6 +450,38 @@ impl Resource {
 
 }
 
+/// returns the write lock of a RwLock ignoring any poisoning if possible
+///
+/// (semantics like `RwLock::try_read ` but without poison)
+fn try_read_lock_poisonless<T>(lock: &RwLock<T>) -> Option<RwLockReadGuard<T>> {
+    use std::sync::TryLockError::*;
+    match lock.try_read() {
+        Ok(lock) => Some(lock),
+        Err(Poisoned(plock)) => Some(plock.into_inner()),
+        Err(WouldBlock) => None
+    }
+}
+
+fn read_lock_poisonless<T>(lock: &RwLock<T>) -> RwLockReadGuard<T> {
+    match lock.read() {
+        Ok(lock) => lock,
+        Err(plock) => plock.into_inner(),
+    }
+}
+
+/// returns the read lock of a RwLock ignoring any poisoning if possible
+///
+/// (semantics like `RwLock::try_write ` but without poison)
+fn try_write_lock_poisonless<T>(lock: &RwLock<T>) -> Option<RwLockWriteGuard<T>> {
+    use std::sync::TryLockError::*;
+    match lock.try_write() {
+        Ok(lock) => Some(lock),
+        Err(Poisoned(plock)) => Some(plock.into_inner()),
+        Err(WouldBlock) => None
+    }
+}
+
+
 impl ResourceInner {
 
     fn is_loaded(&self) -> bool {
@@ -458,6 +491,43 @@ impl ResourceInner {
 
     fn state_info(&self) -> ResourceStateInfo {
         self.state_info.get()
+    }
+
+
+    /// use this to set the state including a state infor derived from the state
+    fn try_modify_state_if<P, F, R, E>(&self, predicate: P, modif: F) -> Option<StdResult<R, E>>
+        where F: FnOnce(ResourceState) -> StdResult<(ResourceState, R), E>,
+              P: FnOnce(&ResourceState) -> bool
+    {
+        return try_write_lock_poisonless(&self.state)
+            .and_then(|mut guard| {
+                if predicate(&*guard) {
+                    let _unwind_safety = FailInfoOnePanic(&self.state_info);
+                    let state = mem::replace(&mut *guard, ResourceState::Failed);
+                    match modif(state) {
+                        Ok((new_state, paiload)) => {
+                            let state_info = new_state.derive_state_info();
+                            *guard = new_state;
+                            self.state_info.set(state_info);
+                            Some(Ok(paiload))
+                        },
+                        Err(e) => {
+                            self.state_info.set(ResourceStateInfo::Failed);
+                            Some(Err(e))
+                        }
+                    }
+                } else {
+                    None
+                }
+            });
+
+        // we only need this for one edge case in which a call to `ResourceLoadingFuture::poll`
+        // did panic but the future was _not_ dropped _and_ there is another `ResourceLoadingFuture`
+        // polling the same resource (or more correctly waiting for it to be done)
+        struct FailInfoOnePanic<'a>(&'a AtomicStateInfo);
+        impl<'a> Drop for FailInfoOnePanic<'a> { fn drop(&mut self) { if ::std::thread::panicking() {
+            self.0.set(ResourceStateInfo::Canceled)
+        }}}
     }
 
     fn set_state_info(&self, info: ResourceStateInfo) {
@@ -479,39 +549,6 @@ impl ResourceInner {
         self.state_info.try_continue_from_cancel()
     }
 
-    /// acquire a `RwLockReadGuard` to the inner state
-    ///
-    /// Note that this is _poison free_ due to the way the inner state is
-    /// polled there is no need for lock poisoning and as such poison is
-    /// ignored.
-    fn state( &self ) -> RwLockReadGuard<ResourceState> {
-        match self.state.read() {
-            Ok( guard ) => guard,
-            Err( poisoned ) => {
-                // we already have our own form of poisoning with mem-replacing state with Failed
-                // during the any mutating operation which can panic (which currently only is poll)
-                let guard = poisoned.into_inner();
-                guard
-            }
-        }
-    }
-
-    /// try to acquire a `RwLockWriteGuard` to the inner state
-    ///
-    /// It returns `Some` if the lock was acquired or `None` if it
-    /// could not be acquired because someone else has a read or write lock.
-    ///
-    /// Note that this is _poison free_ due to the way the inner state is
-    /// polled there is no need for lock poisoning and as such poison is
-    /// ignored.
-    fn try_state_mut(&self) -> Option<RwLockWriteGuard<ResourceState>> {
-        use std::sync::TryLockError::*;
-        match self.state.try_write() {
-            Ok(lock) => Some(lock),
-            Err(Poisoned(plock)) => Some(plock.into_inner()),
-            Err(WouldBlock) => None
-        }
-    }
 
     /// access the source of the resource (if any)
     fn source(&self) -> Option<&Source> {
@@ -530,13 +567,24 @@ impl ResourceInner {
 
     fn _try_unload(&self) -> Result<()> {
         if self.source().is_some() {
+            // NOTE: we relay on 3 thinks here:
+            //  1. loading/polling uses the lock to change the state
+            //  2. we only create inital AccessGuards while holding the guard (ro is ok)
+            //  3. we use a guard and check in the guard if there are AccessGuards
+            //  If this would be lock free thinks would become much more more complex
+            //  (somethink on the line of first publish that it's not loaded, then
+            //   see if someone might have potentially gotten a AccessGuard by super
+            //   fast polling, if so do set the info back to Not Loaded, only if not
+            //   change the actual state, and more)
             if 0 == self.unload_prevention.load(Ordering::Acquire) {
-                if let Some(mut state) = self.try_state_mut() {
+                let res = self.try_modify_state_if(
                     // there might have been a load/unload prevention before we got the lock
-                    if 0 == self.unload_prevention.load(Ordering::Acquire) {
-                        *state = ResourceState::NotLoaded;
-                        return Ok(());
-                    }
+                    |_| 0 == self.unload_prevention.load(Ordering::Acquire) ,
+                    // we do not care which state it was, now it's not loaded
+                    |_current| Ok((ResourceState::NotLoaded, ()))
+                );
+                if let Some(res) = res {
+                    return res;
                 }
             }
             //TODO typed error
@@ -560,17 +608,25 @@ impl ResourceInner {
     fn _get_if_encoded(&self) -> Option<Guard> {
         use self::ResourceState::*;
 
-        let state_guard = self.state();
-        let ptr = match *state_guard {
-            TransferEncoded( ref encoded )  => Some( encoded as *const TransferEncodedFileBuffer ),
-            _ => None
-        };
-
-        ptr.map(|ptr | Guard {
-            guard: state_guard,
-            state_ref: ptr,
-            _marker: PhantomData
-        })
+        // we do only try to get the lock if state_info is Loaded,
+        // it it is there should be no write access to it and as such
+        // this should not fail, except if we currently are unloading it,
+        // in which case failing is what we want
+        try_read_lock_poisonless(&self.state)
+            .and_then(|state_guard| {
+                let ptr = match *state_guard {
+                    TransferEncoded( ref encoded )  =>
+                        Some( encoded as *const TransferEncodedFileBuffer ),
+                    _ => None
+                };
+                ptr.map(|ptr| {
+                    Guard {
+                        guard: state_guard,
+                        state_ref: ptr,
+                        _marker: PhantomData
+                    }
+                })
+            })
     }
 
 }
@@ -597,7 +653,7 @@ impl ResourceState {
     ///
     /// This can not return `ResourceStateInfo::Canceled` as cancelation is
     /// not expressed in the `ResourceState` but only in the `ResourceStateInfo`
-    fn state_info(&self) -> ResourceStateInfo {
+    fn derive_state_info(&self) -> ResourceStateInfo {
         use self::ResourceState::*;
         match *self {
             NotLoaded => ResourceStateInfo::NotLoaded,
@@ -710,6 +766,20 @@ impl BodyBuffer for Resource {
     }
 }
 
+// we can't have one make_done function due to borrow checker conflicts on
+// borrowing all of self mut
+macro_rules! make_done {
+    ($self:ident) => (
+        make_done!(&mut $self.poll_state, &mut $self.anti_unload)
+    );
+    ($poll_state:expr, $anti_unload:expr) => ({
+        *$poll_state = PollState::Done;
+        let anti = $anti_unload.take()
+            .expect("[BUG] anti is always set when polling started, only removed once it ends");
+        Async::Ready(anti)
+    });
+}
+
 impl<C> ResourceLoadingFuture<C>
     where C: BuilderContext
 {
@@ -726,109 +796,89 @@ impl<C> ResourceLoadingFuture<C>
     fn _poll_inner(&mut self)
         -> Poll<ResourceAccessGuard, Error>
     {
-
-        let helper = self.mut_helper();
-        // try to get a lock, if this fails we either:
-        // 1. [mainly] have a loaded resource, in which case we do not need the lock at all
-        // 2. some one else polls (should not happen as any caller of `_poll_inner` checks this
-        // 3. someone unloads (can not happen as the future contains a `ResourceAccessGuard`)
-        // 4. some "info" getting a read lock for a short moment (but they where rewritting to
-        //    not use a lock at all, so should not happen either)
-        match helper.inner.try_state_mut() {
-            // can happen if it was already loaded but all ResourceAccessGuard's had been dropped
-            None => helper.poll_inner_no_lock(),
-            Some(guard) => helper.poll_inner_with_lock(guard)
-        }
-    }
-
-    fn mut_helper(&mut self) -> MutHelper<C> {
-        MutHelper {
-            inner: &self.inner,
-            poll_state: &mut self.poll_state,
-            anti_unload: &mut self.anti_unload,
-            ctx: &self.ctx
-        }
-    }
-
-}
-
-/// helper to workaround borrow checker limitation (i.e. we can not borrow some fields
-/// ro and some mut when we split the functionality into multiple methods)
-struct MutHelper<'a, C: BuilderContext> {
-    inner: &'a ResourceInner,
-    poll_state: &'a mut PollState,
-    anti_unload: &'a mut Option<ResourceAccessGuard>,
-    ctx: &'a C
-}
-
-impl<'a, C: 'a> MutHelper<'a, C>
-    where C: BuilderContext
-{
-    /// poll if there is no lock which mainly happens if the
-    /// resource is already loaded _and_ used.
-    fn poll_inner_no_lock(self) -> Poll<ResourceAccessGuard, Error> {
         if self.inner.is_loaded() {
-            Ok(self.make_done())
+            // can we rely on it actually beeing loaded?
+            // 1. in which case might it not be the case
+            // => if we unloaded it
+            // => unloading it sets the state using a Release barier,
+            // => we have a Aquire bariere here
+            // => so can our Aquire barier move _above_ the release barier?
+            //  => if so than wo could still see it loaded
+            //   => are you sure there is still the anti_unload which we did create,
+            //      which uses AcqRel in fetch_add and prevents unloading i.e.
+            //      if we do have a anti_unload then we can not see at Loaded which is
+            //      no longer up to date
+            //  => if not so then this can not happen
+            // ===> it's ok
+            // NOTE: that we can only do this because we hold an AntiUnloadGuard while
+            //       loading else this would be bad
+            Ok(make_done!(self))
         } else {
-            // Should not happen. All info methods use the state_info atomic.
-            // But if it does, we know it's not long term (as it is not loaded)
-            // and just try again next tick
-            task::current().notify();
-            Ok(Async::NotReady)
+            // as we can not partially borrow self mut we have to pass the references
+            // to the fields instead of passing self
+            let &mut ResourceLoadingFuture {
+                ref inner, ref ctx,
+                ref mut poll_state, ref mut anti_unload
+            } = self;
+
+            // try to get a lock, if this fails we either:
+            // 1. have a loaded resource, in which case we do not need the lock at all [mainly]
+            // 2. some one did not use the state_info to query some info [ok, np]
+            // 3. there is a bug and two features poll the resource [well, it is at last still safe]
+            let res = inner.try_modify_state_if(
+                // we are polling, so not if here (it would be relevant if we tranform Resource
+                // to a lock less algorithm, which is quite doable, but as long as we do not
+                // need this we don't do so as it's easy to mess up custom synchronizations using
+                // Atomics
+                |_| true,
+                |state| {
+                    ResourceLoadingFuture::poll_inner_with_state(
+                        state,
+                        &inner.source, ctx, poll_state, anti_unload
+                    )
+                }
+            );
+
+            // we did got the guard
+            if let Some(res) = res {
+                res
+            } else {
+                // Should not happen. All info methods use the state_info atomic.
+                // But if it does, we know it's not long term (as it is not loaded)
+                // and just try again next tick
+                task::current().notify();
+                Ok(Async::NotReady)
+            }
         }
     }
 
-    /// drive the inner state machinge
-    ///
-    /// This replaces the state with `Failed` then
-    /// uses `state.poll_encoding_completion` to get the new state
-    /// and sets it (and the state info generate from it) due to this
-    /// Even if there is a panic, it will not cause any bad state, the
-    /// state (and state info) will be failed like expected. Because of
-    /// this we do not need to bother about lock poisoning at all.
-    ///
-    fn poll_inner_with_lock(self, mut state_guard: RwLockWriteGuard<ResourceState>)
-                            -> Poll<ResourceAccessGuard, Error>
+    /// drive the inner state machine
+   ///
+   /// This replaces the state with `Failed` then
+   /// uses `state.poll_encoding_completion` to get the new state
+   /// and sets it (and the state info generate from it) due to this
+   /// Even if there is a panic, it will not cause any bad state, the
+   /// state (and state info) will be failed like expected. Because of
+   /// this we do not need to bother about lock poisoning at all.
+   ///
+    fn poll_inner_with_state(
+        state: ResourceState,
+        source: &Option<Source>,
+        ctx: &C,
+        poll_state: &mut PollState,
+        anti_unload: &mut Option<ResourceAccessGuard>
+    ) -> StdResult<(ResourceState, Async<ResourceAccessGuard>), Error>
     {
-        // we only need this for one edge case in which a call to `ResourceLoadingFuture::poll`
-        // did panic but the future was _not_ dropped _and_ there is another `ResourceLoadingFuture`
-        // polling the same resource (or more correctly waiting for it to be done)
-        struct FailInfoOnePanic<'a>(&'a AtomicStateInfo);
-        impl<'a> Drop for FailInfoOnePanic<'a> { fn drop(&mut self) { if ::std::thread::panicking() {
-            self.0.set(ResourceStateInfo::Canceled)
-        }}}
-        FailInfoOnePanic(&self.inner.state_info);
-
-        // do our own kind of poisoning 1. because of borrowing 2. for unwind safety/no lock poison
-        let moved_out = mem::replace(&mut *state_guard, ResourceState::Failed);
-
-
-        let (move_back_in, async_state) =
-            moved_out.poll_encoding_completion(&self.inner.source, self.ctx)?;
-
-        //Note: we still have the write lock and while people will read from state_info
-        // even if we have the lock they won't write to it with out the lock (except if
-        // the state_info is `canceld` but then we would not be here calling poll, as this
-        // state is only reached if the future is dropped before polling to completion)
-        self.inner.set_state_info(move_back_in.state_info());
-
-        mem::replace(&mut *state_guard, move_back_in);
+        let (new_state, async_state) =
+            state.poll_encoding_completion(source, ctx)?;
 
         Ok(match async_state {
-            Async::NotReady => Async::NotReady,
-            Async::Ready(()) => {
-                self.make_done()
-            }
+            Async::NotReady => (new_state, Async::NotReady),
+            Async::Ready(()) => (new_state, make_done!(poll_state, anti_unload))
         })
     }
 
-    /// helper setting the inner state to done and taking out the `ResourceAccessGuard`
-    fn make_done(self) -> Async<ResourceAccessGuard> {
-        *self.poll_state = PollState::Done;
-        let anti = self.anti_unload.take()
-            .expect("[BUG] anti is always set when polling started, only removed once it ends");
-        Async::Ready(anti)
-    }
+
 }
 
 
@@ -859,9 +909,17 @@ impl<C> Future for ResourceLoadingFuture<C>
         use self::PollState::*;
         match self.poll_state {
             NotPolled => {
-                // if is_inital == true, then we need to poll, else some one else does it for us
-                // (or it's already loaded)
-                let (anti, is_initial) = ResourceAccessGuard::new(&self.inner);
+                let (anti, is_initial) = {
+                    // we use the lock to sync this with the try_unlod
+                    // we don't really need to do this as the only way
+                    // to create new AccessGuards once there are none through a future,
+                    // but if not we have to get even more atomic interactions right, for
+                    // new this is a usable and good enough solution
+                    let _guard = read_lock_poisonless(&self.inner.state);
+                    let res = ResourceAccessGuard::new(&self.inner, &_guard);
+                    mem::drop(_guard);
+                    res
+                };
                 self.anti_unload = Some(anti);
                 if is_initial {
                     self.poll_state = CanPoll;
@@ -876,7 +934,7 @@ impl<C> Future for ResourceLoadingFuture<C>
             SomeOneElsePolls => {
                 let state = self.inner.try_continue_from_cancel();
                 match state {
-                    ResourceStateInfo::Loaded => Ok(self.mut_helper().make_done()),
+                    ResourceStateInfo::Loaded => Ok(make_done!(self)),
                     //TODO typed error
                     ResourceStateInfo::Failed => Err("resource loading failed".into()),
                     ResourceStateInfo::Loading | ResourceStateInfo::NotLoaded => {
@@ -919,9 +977,14 @@ impl ResourceAccessGuard {
     /// who ever creates a ResourceAccessGuard which is the first is responsible for loading the
     /// resource it's belongs to (no one else will do so, at last not until the given guard
     /// and all others created after it are dropped).
-    fn new(resource: &Arc<ResourceInner>) -> (Self, bool) {
+    ///
+    /// # Context
+    ///
+    /// This needs to be called why the inner RwLock is hold, or it can conflict with
+    /// `try_unload`
+    fn new(resource: &Arc<ResourceInner>, _guard: &RwLockReadGuard<ResourceState>) -> (Self, bool) {
         let handle = resource.clone();
-        let prev = handle.unload_prevention.fetch_add(1, Ordering::Release);
+        let prev = handle.unload_prevention.fetch_add(1, Ordering::AcqRel);
         (ResourceAccessGuard { handle }, prev == 0)
     }
 
@@ -941,7 +1004,16 @@ impl Clone for ResourceAccessGuard {
 
     fn clone(&self) -> Self {
         let handle = self.handle.clone();
-        handle.unload_prevention.fetch_add(1, Ordering::Release);
+        //NOTE: it might be possible to make this Release but
+        //      this could play bad wrt. try_unload if another
+        //      fetch_sub(1, Release) (mainly of this thread, wiht
+        //      synced AccessGuards not only) could be ordered before this
+        //      fetch, braking the guarntee that the result of this
+        //      fetch_add can not be 1 as it need another AccessGuard
+        //      to exist. I'm pretty sure it would be ok to use Relese
+        //      but I would have to take a deeper and time consuming look
+        //      at the standard to make sure this really is the case.
+        handle.unload_prevention.fetch_add(1, Ordering::AcqRel);
         ResourceAccessGuard { handle }
     }
 }
@@ -951,7 +1023,7 @@ impl Drop for ResourceAccessGuard {
     fn drop(&mut self) {
         // decrease the unload_prevention count, as we added one when construction and no one else
         // does access the variable this won't underflow
-        self.handle.unload_prevention.fetch_sub(1, Ordering::Release);
+        self.handle.unload_prevention.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
