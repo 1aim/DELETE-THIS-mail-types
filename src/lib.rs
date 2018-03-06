@@ -33,7 +33,7 @@ pub mod file_buffer;
 pub mod mime;
 mod iri;
 
-#[cfg(feature="default_impl_any")]
+
 pub mod default_impl;
 
 pub use self::iri::IRI;
