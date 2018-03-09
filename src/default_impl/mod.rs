@@ -16,6 +16,10 @@ mod fs;
 #[cfg(feature="default_impl_fs")]
 pub use self::fs::*;
 
+
+#[cfg(all(feature="default_impl_fs", feature="default_impl_cpupool"))]
+pub mod simple_context;
+
 #[cfg(all(
     test,
     not(feature="default_impl_cpupool"),
