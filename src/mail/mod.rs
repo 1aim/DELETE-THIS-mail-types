@@ -125,7 +125,7 @@ impl Mail {
     //TODO potentially change it into as_encodable_mail(&mut self)
     /// Turns the mail into a future with resolves to an `EncodeableMail`
     ///
-    pub fn into_encodeable_mail<'a, C: BuilderContext>(self, ctx: &C ) -> MailFuture<C> {
+    pub fn into_encodeable_mail<C: BuilderContext>(self, ctx: &C ) -> MailFuture<C> {
         let mut futures = Vec::new();
         self.walk_mail_bodies(&mut |resource: &Resource| {
             Ok(futures.push(resource.create_loading_future(ctx.clone())))
