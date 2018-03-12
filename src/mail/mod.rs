@@ -280,6 +280,10 @@ mod test {
         Resource::sourceless_from_buffer(fb)
     }
 
+    trait AssertDebug: Debug {}
+    trait AssertSend: Send {}
+    trait AssertSync: Sync {}
+
     mod Mail {
         #![allow(non_snake_case)]
         use std::str;
@@ -290,12 +294,18 @@ mod test {
         use default_impl::test_context;
         use super::super::*;
         use super::resource_from_text;
+        use super::{AssertDebug, AssertSend, AssertSync};
 
         fn load_blocking<C>(r: &Resource, ctx: &C) -> ResourceAccessGuard
             where C: BuilderContext
         {
             r.create_loading_future(ctx.clone()).wait().unwrap()
         }
+
+        impl AssertDebug for Mail {}
+        impl AssertSend for Mail {}
+        impl AssertSync for Mail {}
+
 
         #[test]
         fn walk_mail_bodies_does_not_skip() {
@@ -434,6 +444,11 @@ mod test {
         use default_impl::test_context;
         use super::super::*;
         use super::resource_from_text;
+        use super::{AssertDebug, AssertSend, AssertSync};
+
+        impl AssertDebug for EncodableMail {}
+        impl AssertSend for EncodableMail {}
+        impl AssertSync for EncodableMail {}
 
         #[test]
         fn sets_generated_headers_for_outer_mail() {
