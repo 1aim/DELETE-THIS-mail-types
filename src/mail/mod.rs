@@ -34,7 +34,7 @@ mod builder;
 mod encode;
 
 
-
+#[derive(Debug)]
 pub struct Mail {
     //NOTE: by using some OwnedOrStaticRef AsciiStr we can probably safe a lot of
     // unnecessary allocations
@@ -42,7 +42,7 @@ pub struct Mail {
     body: MailPart,
 }
 
-
+#[derive(Debug)]
 pub enum MailPart {
     SingleBody {
         body: Resource
@@ -268,6 +268,7 @@ impl fmt::Debug for EncodableMail {
 
 #[cfg(test)]
 mod test {
+    use std::fmt::Debug;
     use ::MediaType;
     use ::file_buffer::FileBuffer;
     use ::Resource;
