@@ -4,7 +4,7 @@ use std::fmt::Debug;
 use chrono;
 use futures::Future;
 
-pub type SendBoxFuture<I, E> = Box<Future<Item=I, Error=E>+Send>;
+pub type SendBoxFuture<I, E> = Box<Future<Item=I, Error=E> + Send + 'static>;
 
 pub fn now() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now()
