@@ -53,4 +53,5 @@ pub mod prelude {
     pub use mheaders::*;
     pub use mheaders::components::*;
     pub use mail::{Builder, Mail, Resource};
+    pub use file_buffer::FileBuffer;
 }
