@@ -159,6 +159,8 @@ impl AtomicStateInfo {
 #[derive(Debug)]
 struct ResourceInner {
     //CONSTRAINT: assert!(state.is_loaded() || source.is_some())
+    //CONSTRAINT: the future in ResourceState can only be accessed in exclusive lock mode
+    //            using it in read mead would require it to be send, which it isn't
     state: RwLock<ResourceState>,
     source: Option<Source>,
 
@@ -206,17 +208,17 @@ enum ResourceState {
     NotLoaded,
 
     /// In the process of loading a resource
-    LoadingBuffer( SendBoxFuture<FileBuffer, Error> ),
+    LoadingBuffer(sync_helper::MutOnly<SendBoxFuture<FileBuffer, Error>>),
 
     /// The resource is "loaded" but not encoded, i.e. wrt. the outer API
     /// loading is not yet complete
-    Loaded( FileBuffer ),
+    Loaded(FileBuffer),
 
     /// In the process of transfer encoding which is part of loading a resource
-    EncodingBuffer( SendBoxFuture<TransferEncodedFileBuffer, Error> ),
+    EncodingBuffer(sync_helper::MutOnly<SendBoxFuture<TransferEncodedFileBuffer, Error>>),
 
     /// The resource is complete loaded (including transfer encoding)
-    TransferEncoded( TransferEncodedFileBuffer ),
+    TransferEncoded(TransferEncodedFileBuffer),
 
     /// Loading the resource failed
     Failed
@@ -338,8 +340,8 @@ impl Resource {
     /// This is useful in combination with e.g. "on-the-fly" generated resources. A Resource
     /// created this way can not be unloaded, as such this preferably should only be used with
     /// "one-use" resources which do not need to be cached.
-    pub fn sourceless_from_future( fut: SendBoxFuture<FileBuffer, Error> ) -> Self {
-        Self::_new( ResourceState::LoadingBuffer( fut ), None )
+    pub fn sourceless_from_future(fut: SendBoxFuture<FileBuffer, Error>) -> Self {
+        Self::_new( ResourceState::LoadingBuffer(sync_helper::MutOnly::new(fut)), None)
     }
 
 
@@ -697,28 +699,29 @@ impl ResourceState {
                             "[BUG] illegal state no source and not loaded".into()
                         })?;
 
-                    LoadingBuffer(
-                        ctx.load_resource(source)
-                    )
+                    LoadingBuffer(sync_helper::MutOnly::new(ctx.load_resource(source)))
                 },
 
                 LoadingBuffer(mut fut) => {
-                    match fut.poll()? {
-                        Async::Ready( buf )=> Loaded( buf ),
+                    match fut.get_mut().poll()? {
+                        Async::Ready(buf)=> Loaded(buf),
                         Async::NotReady => {
-                            return Ok( ( LoadingBuffer(fut), Async::NotReady ) )
+                            return Ok((
+                                LoadingBuffer(fut),
+                                Async::NotReady
+                            ))
                         }
                     }
                 },
 
                 Loaded(buf) => {
-                    EncodingBuffer( ctx.offload_fn(move || {
+                    EncodingBuffer(sync_helper::MutOnly::new(ctx.offload_fn(move || {
                         TransferEncodedFileBuffer::encode_buffer(buf, None)
-                    }))
+                    })))
                 },
 
                 EncodingBuffer(mut fut) => {
-                    match fut.poll()? {
+                    match fut.get_mut().poll()? {
                         Async::Ready( buf )=> TransferEncoded( buf ),
                         Async::NotReady => {
                             return Ok( ( EncodingBuffer(fut), Async::NotReady ) )
@@ -1118,5 +1121,35 @@ mod test {
 //    }
 
 
+    trait AssertSend: Send {}
+    impl AssertSend for Resource {}
 
+    trait AssertSync: Sync {}
+    impl AssertSync for Resource {}
+}
+
+
+mod sync_helper {
+    pub(crate) struct MutOnly<T> {
+        //CONSTRAINT: this can only be accessed through a &mut borrow
+        inner: T
+    }
+
+    impl<T> MutOnly<T> {
+        pub(crate) fn new(inner: T) -> Self {
+            MutOnly { inner }
+        }
+
+        pub(crate) fn get_mut(&mut self) -> &mut T {
+            &mut self.inner
+        }
+    }
+
+    //SAFE: this is safe as the data can only be accessed &mut, i.e. from one place at a time
+    // which means there can't be multiple references to it between thread and as such it's
+    // Sync even if the inner data is "just" Send (it can be seen that bettween each mut access,
+    // wich btw. would need some form of synchronization, the data is Send to the thread where it's
+    // accessed from). It's the same reason as why Mutex<T> is `Sync` even if T is not `Sync` but
+    // just `Send`
+    unsafe impl<T: Send> Sync for MutOnly<T> {}
 }
