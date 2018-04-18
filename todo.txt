@@ -1,0 +1,26 @@
+TEST encode
+
+DOUBLE CHECK: the code wrt. Unstructured
+CHORE: headers!{..} last item can have `,`
+CECK: do we check has multipart bodies have multipart mime?
+ -> builder does assure this but can we build without builder?
+
+
+CHORE: token component usable in custom XXX cases
+
+
+CHANGE BOUNDARY CHARS:
+bchars := bcharsnospace / " "
+
+     bcharsnospace := DIGIT / ALPHA / "'" / "(" / ")" /
+                      "+" / "_" / "," / "-" / "." /
+                      "/" / ":" / "=" / "?"
+(last can not be space)
+
+MAX LEN is 70
+
+
+
+The think about mime sniffing:
+Drop it? Make it configurable? Only sniff images?
+

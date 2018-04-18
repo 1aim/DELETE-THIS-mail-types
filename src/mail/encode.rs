@@ -6,7 +6,7 @@ use soft_ascii_string::{
 use media_type::BOUNDARY;
 
 use core::error::{Result, ErrorKind, Error};
-use core::codec::{Encoder, EncodableInHeader, EncodeHandle};
+use core::encoder::{Encoder, EncodableInHeader, EncodeHandle};
 use core::header::{HeaderName};
 use mheaders::ContentType;
 

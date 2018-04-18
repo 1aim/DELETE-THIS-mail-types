@@ -2,17 +2,17 @@ use soft_ascii_string::SoftAsciiString;
 
 use media_type::BOUNDARY;
 
-use core::utils::uneraser_ref;
-use core::error::{Result, ErrorKind};
-use core::codec::EncodableInHeader;
-use core::{ HeaderTryInto, Header, HeaderMap};
-use mheaders::{
+use common::utils:uneraser_ref;
+use common::encoder::EncodableInHeader;
+use headers::{
+    HeaderTryInto, Header, HeaderMap,
     ContentType,
     ContentTransferEncoding
 };
+use headers::components::MediaType;
 
-use mheaders::components::MediaType;
-use mime::create_random_boundary;
+use ::error::{BuilderError, OtherBuilderErrorKind};
+use ::mime::create_random_boundary;
 
 use super::resource::Resource;
 use super::{ MailPart, Mail };
@@ -58,54 +58,51 @@ impl BuilderShared {
         header: H,
         hbody: H::Component,
         is_multipart: bool
-    ) -> Result<usize>
+    ) -> Result<usize, BuilderError>
         where H: Header,
               H::Component: EncodableInHeader
     {
         check_header::<H>(&hbody, is_multipart)?;
-        self.headers.insert( header, hbody )
+        self.headers.insert(header, hbody)
     }
 
     /// might already have added some headers even if it returns Err(...)
-    fn headers( &mut self, headers: HeaderMap, is_multipart: bool ) -> Result<()> {
+    fn headers(&mut self, headers: HeaderMap, is_multipart: bool)
+        -> Result<(), BuilderError>
+    {
         //TODO CONSIDER:
         // it is not impossible to make this function "transactional" for HeaderMap
         // (it is impossible for TotalOrderMultiMap) by:
         // 1. implement pop on TotalOrderMultiMap
-        // 2. store current len befor extending
+        // 2. store current len before extending
         // 3. pop until the stored length is reached again
-        check_multiple_headers( &headers, is_multipart )?;
-        self.headers.try_extend( headers )?;
-        Ok( () )
+        check_multiple_headers(&headers, is_multipart)?;
+        self.headers.try_extend(headers)?;
+        Ok(())
     }
 
-    fn build( self, body: MailPart ) -> Result<Mail> {
-        Ok( Mail {
+    fn build(self, body: MailPart) -> Result<Mail, BuilderError> {
+        Ok(Mail {
             headers: self.headers,
             body: body,
-        } )
+        })
     }
 }
 
-pub fn check_multiple_headers( headers: &HeaderMap , is_multipart: bool) -> Result<()> {
+pub fn check_multiple_headers(headers: &HeaderMap , is_multipart: bool)
+     -> Result<(), BuilderError>
+{
     if let Some( .. ) = headers.get_single(ContentTransferEncoding) {
-        bail!( concat!(
-            "setting content transfer encoding through a header is not supported,",
-            "use Ressource::set_preferred_encoding on the body instead"
-        ) );
+        return Err(OtherBuilderErrorKind::InsertingContentTransferEncodingHeader.into());
     }
     //FIMXE[BUG] get->is_multipart seems wrong instead is_multipart->get?
     if let Some( mime ) = headers.get_single(ContentType) {
         if is_multipart {
             if !mime?.is_multipart() {
-                return Err( ErrorKind::ContentTypeAndBodyIncompatible.into() )
+                return Err(OtherBuilderErrorKind::SingleMultipartMixup.into());
             }
         } else {
-            bail!( concat!(
-                    "setting content type through a header for a single part body",
-                    "is not supported use RessourceSpec::media_type to specify the",
-                    "content type"
-                ) );
+            return Err(OtherBuilderErrorKind::InsertSinglepartContentTypeHeader.into());
         }
     }
     Ok( () )
@@ -114,7 +111,7 @@ pub fn check_multiple_headers( headers: &HeaderMap , is_multipart: bool) -> Resu
 pub fn check_header<H>(
     hbody: &H::Component,
     is_multipart: bool
-) -> Result<()>
+) -> Result<(), BuilderError>
     where H: Header,
           H::Component: EncodableInHeader
 {
@@ -124,22 +121,15 @@ pub fn check_header<H>(
                 let mime: &MediaType = uneraser_ref(hbody)
                     .ok_or_else( || "custom Content-Type headers are not supported" )?;
                 if !mime.is_multipart() {
-                    return Err( ErrorKind::ContentTypeAndBodyIncompatible.into() )
+                    return Err(OtherBuilderErrorKind::SingleMultipartMixup.into());
                 }
             } else {
-                bail!( concat!(
-                    "setting content type through a header for a single part body",
-                    "is not supported use RessourceSpec::media_type to specify the",
-                    "content type"
-                ) );
+                return Err(OtherBuilderErrorKind::InsertSinglepartContentTypeHeader.into());
             }
 
         },
         "Content-Transfer-Encoding" => {
-            bail!( concat!(
-                "setting content transfer encoding through a header is not supported,",
-                "use Ressource::set_preferred_encoding on the body instead"
-            ) );
+            return Err(OtherBuilderErrorKind::InsertingContentTransferEncodingHeader.into());
         }
         _ => {}
     }
@@ -158,7 +148,7 @@ impl Builder {
     ///
     /// if the media-type is not a `multipart/` media type an
     /// error is returned
-    pub fn multipart(media_type: MediaType) -> Result<MultipartBuilder> {
+    pub fn multipart(media_type: MediaType) -> Result<MultipartBuilder, BuilderError> {
         if !media_type.is_multipart() {
             return Err( ErrorKind::NotMultipartMime( media_type.into() ).into() );
         }
@@ -175,10 +165,10 @@ impl Builder {
 
         //UNWRAP_SAFETY: it can only fail with illegal headers,
         // but this header can not be illegal
-        Ok(res.header( ContentType, media_type ).unwrap())
+        Ok(res.header(ContentType, media_type).unwrap())
     }
 
-    pub fn singlepart( r: Resource ) -> SinglepartBuilder {
+    pub fn singlepart(r: Resource) -> SinglepartBuilder {
         SinglepartBuilder {
             inner: BuilderShared::new(),
             body: r,
@@ -199,16 +189,15 @@ impl SinglepartBuilder {
               C: HeaderTryInto<H::Component>
     {
         let comp = hbody.try_into()?;
-        self.inner.header( header, comp, false )
+        self.inner.header(header, comp, false)
     }
 
-    pub fn headers( mut self, headers: HeaderMap ) -> Result<Self> {
-        self.inner.headers( headers, false )?;
-        Ok( self )
+    pub fn headers(mut self, headers: HeaderMap) -> Result<Self, BuilderError> {
+        self.inner.headers(headers, false)?;
+        Ok(self)
     }
 
-    pub fn build( self ) -> Result<Mail> {
-
+    pub fn build(self) -> Result<Mail, BuilderError> {
         self.inner.build( MailPart::SingleBody { body: self.body } )
     }
 }
@@ -225,34 +214,34 @@ impl MultipartBuilder {
         mut self,
         header: H,
         hbody: C
-    ) -> Result<Self>
+    ) -> Result<Self, BuilderError>
         where H: Header,
               H::Component: EncodableInHeader,
               C: HeaderTryInto<H::Component>
     {
         let comp = hbody.try_into()?;
-        self.inner.header( header, comp, true )?;
-        Ok( self )
+        self.inner.header(header, comp, true)?;
+        Ok(self)
     }
 
-    pub fn headers( mut self, headers: HeaderMap ) -> Result<Self> {
-        self.inner.headers( headers, true )?;
-        Ok( self )
+    pub fn headers(mut self, headers: HeaderMap) -> Result<Self, BuilderError> {
+        self.inner.headers(headers, true)?;
+        Ok(self)
     }
 
-    pub fn body( mut self, body: Mail ) -> Result<Self> {
-        self.bodies.push( body );
-        Ok( self )
+    pub fn body(mut self, body: Mail) -> Result<Self, BuilderError> {
+        self.bodies.push(body);
+        Ok(self)
     }
 
-    pub fn build( self ) -> Result<Mail> {
+    pub fn build(self) -> Result<Mail, BuilderError> {
         if self.bodies.len() == 0 {
             Err( ErrorKind::NeedAtLastOneBodyInMultipartMail.into() )
         } else {
-            self.inner.build( MailPart::MultipleBodies {
+            self.inner.build(MailPart::MultipleBodies {
                 bodies: self.bodies,
                 hidden_text: self.hidden_text.unwrap_or( SoftAsciiString::new() ),
-            } )
+            })
         }
     }
 }

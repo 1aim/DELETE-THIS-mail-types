@@ -9,12 +9,14 @@ use std::mem;
 
 use futures::{  Future, Poll, Async };
 use futures::task;
+use failure::Backtrace;
 
-use core::error::{Error, Result};
-use core::codec::BodyBuffer;
+use common::error::{EncodingError, EncodingErrorKind};
+use common::encoder::BodyBuffer;
 
-use utils::SendBoxFuture;
-use file_buffer::{FileBuffer, TransferEncodedFileBuffer};
+use ::error::{ResourceError, ResourceLoadingError, ResourceLoadingErrorKind}
+use ::utils::SendBoxFuture;
+use ::file_buffer::{FileBuffer, TransferEncodedFileBuffer};
 use super::context::{BuilderContext, Source};
 
 /// A Resource represent something which can be a body (part) of a Mail.
@@ -392,9 +394,9 @@ impl Resource {
     /// # Example
     /// ```
     /// # extern crate futures;
-    /// # extern crate mail_codec;
-    /// # use mail_codec::{Resource, ResourceAccessGuard};
-    /// # use mail_codec::context::BuilderContext;
+    /// # extern crate mail_type;
+    /// # use mail_type::{Resource, ResourceAccessGuard};
+    /// # use mail_type::context::BuilderContext;
     /// # use futures::Future;
     /// fn load_resource_blocking<C>(resource: &Resource, ctx: C) -> ResourceAccessGuard
     ///     where C: BuilderContext
@@ -446,7 +448,7 @@ impl Resource {
     /// This method does not block, through it can block other
     /// mothods as it does _try_ to aquire the write lock to
     /// the inner resources state
-    pub fn try_unload(&self) -> Result<()> {
+    pub fn try_unload(&self) -> Result<(), ResourceError> {
         self.inner.try_unload()
     }
 
@@ -557,7 +559,7 @@ impl ResourceInner {
         self.source.as_ref()
     }
 
-    fn try_unload(&self) -> Result<()> {
+    fn try_unload(&self) -> Result<(), ResourceError> {
         use self::ResourceStateInfo::*;
         match self.state_info() {
             NotLoaded => Ok(()),
@@ -567,7 +569,7 @@ impl ResourceInner {
         }
     }
 
-    fn _try_unload(&self) -> Result<()> {
+    fn _try_unload(&self) -> Result<(), ResourceError> {
         if self.source().is_some() {
             // NOTE: we relay on 3 thinks here:
             //  1. loading/polling uses the lock to change the state
@@ -674,7 +676,7 @@ impl ResourceState {
     /// It requires a `ctx` as it will load a resources data using `ctx.load_resource`
     /// and offloads the transfer encoding of the data with `ctx.offload_fn`/`ctx.offload`
     fn poll_encoding_completion<C>(self, source: &Option<Source>, ctx: &C)
-                                   -> Result<(ResourceState, Async<()>)>
+                                   -> Result<(ResourceState, Async<()>), ResourceError>
         where C: BuilderContext
     {
         use self::ResourceState::*;
@@ -694,16 +696,21 @@ impl ResourceState {
             continue_with = match continue_with {
                 NotLoaded => {
                     let source: &Source = source.as_ref()
-                        .ok_or_else(|| -> Error {
-                            //TODO typed error
-                            "[BUG] illegal state no source and not loaded".into()
-                        })?;
+                        .expect("[BUG] illegal state no source and not loaded");
 
                     LoadingBuffer(sync_helper::MutOnly::new(ctx.load_resource(source)))
                 },
 
                 LoadingBuffer(mut fut) => {
-                    match fut.get_mut().poll()? {
+                    let async = fut
+                        .get_mut().poll()
+                        .map_err(|err| err
+                            .with_source_iri_or_else(|| {
+                                source.as_ref().map(|source| source.iri.clone())
+                            })
+                        )?;
+
+                    match async {
                         Async::Ready(buf)=> Loaded(buf),
                         Async::NotReady => {
                             return Ok((
@@ -734,8 +741,13 @@ impl ResourceState {
                 },
 
                 Failed => {
-                    //TODO typed error
-                    bail!( "failed already in previous poll" );
+                    let iri = source.as_ref()
+                        .map(|source| source.iri.clone());
+
+                    return Err(ResourceLoadingError::from((
+                        iri,
+                        ResourceLoadingErrorKind::SharedResourcePoison
+                    )).into());
                 }
             }
         }
@@ -757,13 +769,13 @@ impl<'a> Deref for Guard<'a> {
 /// We need to implement `BodyBuffer` to use `Resource` as a body buffer for encoding
 /// a `Mail`
 impl BodyBuffer for Resource {
-    fn with_slice<FN, R>(&self, func: FN) -> Result<R>
-        where FN: FnOnce(&[u8]) -> Result<R>
+    fn with_slice<FN, R>(&self, func: FN) -> Result<R, EncodingError>
+        where FN: FnOnce(&[u8]) -> Result<R, EncodingError>
     {
         if let Some( guard ) = self.get_if_encoded() {
             func(&*guard)
         } else {
-            bail!("buffer has not been encoded yet");
+            Err(EncodingErrorKind::AccessingMailBodyFailed.into())
         }
 
     }
@@ -870,7 +882,7 @@ impl<C> ResourceLoadingFuture<C>
         ctx: &C,
         poll_state: &mut PollState,
         anti_unload: &mut Option<ResourceAccessGuard>
-    ) -> StdResult<(ResourceState, Async<ResourceAccessGuard>), Error>
+    ) -> StdResult<(ResourceState, Async<ResourceAccessGuard>), ResourceError>
     {
         let (new_state, async_state) =
             state.poll_encoding_completion(source, ctx)?;
@@ -904,7 +916,7 @@ impl<C> Future for ResourceLoadingFuture<C>
     where C: BuilderContext
 {
     type Item = ResourceAccessGuard;
-    type Error = Error;
+    type Error = ResourceError;
 
 
     fn poll( &mut self ) -> Poll<Self::Item, Self::Error> {
@@ -985,7 +997,9 @@ impl ResourceAccessGuard {
     ///
     /// This needs to be called why the inner RwLock is hold, or it can conflict with
     /// `try_unload`
-    fn new(resource: &Arc<ResourceInner>, _guard: &RwLockReadGuard<ResourceState>) -> (Self, bool) {
+    fn new(resource: &Arc<ResourceInner>, _guard: &RwLockReadGuard<ResourceState>)
+        -> (Self, bool)
+    {
         let handle = resource.clone();
         let prev = handle.unload_prevention.fetch_add(1, Ordering::AcqRel);
         (ResourceAccessGuard { handle }, prev == 0)

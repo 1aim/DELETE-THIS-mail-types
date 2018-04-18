@@ -145,7 +145,7 @@ fn sniff_media_type(_buffer: &[u8]) -> Result<MediaType> {
 }
 
 fn fix_newlines(buffer: Vec<u8>) -> Vec<u8> {
-    //TODO replace current stub impl with fix_newlines impl from mail-codec-composition
+    //TODO replace current stub impl with fix_newlines impl from mail-type-composition
     // and move fix_newlines to core
     let mut hit_cr = false;
     for bch in buffer.iter() {

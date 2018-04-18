@@ -2,29 +2,23 @@
 authors = ["Philipp Korber <p.korber@1aim.com>"]
 categories = []
 description = "TODO"
-documentation = "https://docs.rs/mail-codec"
+documentation = "https://docs.rs/mail-type"
 keywords = ["mail", "codec", "mime", "smtp"]
 license = "MIT OR Apache-2.0"
-name = "mail-codec"
+name = "mail-type"
 readme = "./README.md"
-repository = "https://github.com/1aim/mail-codec"
+repository = "https://github.com/1aim/mail-type"
 version = "0.2.0"
 
-[badges]
-
-[badges.travis-ci]
-branch = "master"
-repository = "1aim/mail-codec"
 
 [dependencies]
+failure = "0.1.1"
 futures = "0.1.14"
 log = "0.3.8"
 rand = "0.3.15"
 vec1 = { git="https://github.com/1aim/vec1" }
-total-order-multi-map = { git="https://github.com/1aim/total-order-multi-map" }
-mail-codec-core = { git="https://github.com/1aim/mail-codec-core" }
-mail-codec-headers = { git="https://github.com/1aim/mail-codec-headers" }
-error-chain = "0.11.0"
+mail-common = { git="https://github.com/1aim/mail-common" }
+mail-headers = { git="https://github.com/1aim/mail-headers" }
 chrono = "0.4.0"
 soft-ascii-string = "0.2.0"
 
@@ -32,10 +26,6 @@ soft-ascii-string = "0.2.0"
 git="https://github.com/1aim/mime"
 branch="parser_revamp"
 version="0.4.0"
-
-[dependencies.tree_magic]
-version = "0.2.0"
-features = ["staticmime"]
 
 [dependencies.futures-cpupool]
 optional = true
@@ -50,4 +40,4 @@ default_impl =  ["default_impl_cpupool", "default_impl_fs"]
 default_impl_cpupool = ["futures-cpupool" ]
 default_impl_fs = []
 
-traceing = [ "mail-codec-core/traceing", "mail-codec-headers/traceing" ]
+traceing = [ "mail-common/traceing", "mail-headers/traceing" ]

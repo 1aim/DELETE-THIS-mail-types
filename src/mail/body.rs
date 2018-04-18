@@ -4,8 +4,7 @@ use std::fmt;
 use utils::SendBoxFuture;
 use futures::Async;
 
-use core::error::*;
-use core::codec::transfer_encoding::TransferEncodedFileBuffer;
+use common::encoder::transfer_encoding::TransferEncodedFileBuffer;
 
 
 pub type FutureBuf = SendBoxFuture<TransferEncodedFileBuffer, Error>;
@@ -25,7 +24,7 @@ enum InnerBody {
     /// to store, but have not jet dropped the mail it is
     /// contained within, so we still need a value for InnerBody
     ///
-    /// this variations should only ever occure between
+    /// this variations should only ever occur between
     /// a call to a BodyFuture in `MailFuture::poll` resolved to
     /// an Error and the Body/Mail being dropped (before `MailFuture::poll`
     /// exists)
