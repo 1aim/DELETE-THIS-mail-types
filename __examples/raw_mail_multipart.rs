@@ -1,4 +1,4 @@
-extern crate mail_codec as mail;
+extern crate mail_type as mail;
 extern crate futures;
 extern crate mime as media_type;
 extern crate futures_cpupool;

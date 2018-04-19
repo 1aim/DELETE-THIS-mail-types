@@ -3,16 +3,16 @@ use std::env;
 
 use futures::Future;
 
-use mail_codec::file_buffer::FileBuffer;
-use mail_codec::{
-    MediaType,
+use mail_type::file_buffer::FileBuffer;
+use headers::components::MediaType;
+use mail_type::{
     Resource,
     IRI,
     Source,
     ResourceStateInfo
 };
-use mail_codec::context::CompositeBuilderContext;
-use mail_codec::default_impl::{FsResourceLoader, simple_cpu_pool };
+use mail_type::context::CompositeBuilderContext;
+use mail_type::default_impl::{FsResourceLoader, simple_cpu_pool };
 
 fn loaded_resource(path: &str, media_type: &str, name: Option<&str>) -> Resource {
     let resource_loader: FsResourceLoader = FsResourceLoader::new(

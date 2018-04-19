@@ -2,10 +2,11 @@ use std::ops::Deref;
 
 use media_type::{TEXT, CHARSET};
 
-use mheaders::components::{TransferEncoding, MediaType};
-use core::utils::FileMeta;
-use core::error::{ErrorKind, Result};
-use core::codec::{quoted_printable, base64};
+use common::utils::FileMeta;
+use common::bind::{quoted_printable, base64};
+use common::error::{EncodingError, UNKNOWN};
+
+use headers::components::{TransferEncoding, MediaType};
 
 
 
@@ -24,34 +25,36 @@ pub struct FileBuffer {
 
 impl FileBuffer {
 
-    pub fn new( content_type: MediaType, data: Vec<u8> ) -> FileBuffer {
+    pub fn new(content_type: MediaType, data: Vec<u8>) -> FileBuffer {
         FileBuffer::with_file_meta(content_type, data, Default::default() )
     }
 
-    pub fn with_file_meta(content_type: MediaType, data: Vec<u8>, file_meta: FileMeta ) -> FileBuffer {
+    pub fn with_file_meta(content_type: MediaType, data: Vec<u8>, file_meta: FileMeta )
+        -> FileBuffer
+    {
         FileBuffer { content_type, data, file_meta }
     }
 
-    pub fn with_data<FN>( mut self, modif: FN ) -> Self
+    pub fn with_data<FN>(mut self, modif: FN) -> Self
         where FN: FnOnce( Vec<u8> ) -> Vec<u8>
     {
-        self.data = modif( self.data );
+        self.data = modif(self.data);
         self
     }
 
-    pub fn content_type( &self ) -> &MediaType {
+    pub fn content_type(&self) -> &MediaType {
         &self.content_type
     }
 
-    pub fn file_meta( &self ) -> &FileMeta {
+    pub fn file_meta(&self) -> &FileMeta {
         &self.file_meta
     }
 
-    pub fn file_meta_mut( &mut self ) -> &mut FileMeta {
+    pub fn file_meta_mut(&mut self) -> &mut FileMeta {
         &mut self.file_meta
     }
 
-    pub fn has_ascii_charset( &self ) -> bool {
+    pub fn has_ascii_charset(&self) -> bool {
         let ct = self.content_type();
         ct.type_() == TEXT &&
             ct.get_param(CHARSET)
@@ -59,7 +62,7 @@ impl FileBuffer {
                 .unwrap_or(true)
     }
 
-    pub fn contains_text( &self ) -> bool {
+    pub fn contains_text(&self) -> bool {
         let type_ = self.content_type().type_();
         type_ == TEXT
     }
@@ -82,7 +85,7 @@ impl Into< Vec<u8> > for FileBuffer {
 
 
 
-pub fn find_encoding( buffer: &FileBuffer ) -> TransferEncoding {
+pub fn find_encoding(buffer: &FileBuffer) -> TransferEncoding {
     if buffer.has_ascii_charset() {
         //TODO support lossy 7Bit encoding dropping '\0' and orphan '\n', '\r'
         TransferEncoding::_7Bit
@@ -122,7 +125,7 @@ impl TransferEncodedFileBuffer {
         buffer: FileBuffer,
         //Note: TransferEncoding is Copy
         preferred_encoding: Option<TransferEncoding>
-    ) -> Result<TransferEncodedFileBuffer>
+    ) -> Result<TransferEncodedFileBuffer, EncodingError>
     {
         use self::TransferEncoding::*;
 
@@ -154,40 +157,40 @@ impl Deref for TransferEncodedFileBuffer {
 
 
 
-fn encode_7bit( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
+fn encode_7bit(buffer: FileBuffer) -> Result<TransferEncodedFileBuffer, EncodingError> {
     {
         let data: &[u8] = &*buffer;
 
         let mut last = b'\0';
         for byte in data.iter().cloned() {
-            if byte >= 128 || byte == 0 {
-                return Err( ErrorKind::Invalide7BitValue( byte ).into() )
+            if byte >= 128 {
+                ec_bail!(kind: InvalidTextEncoding {
+                    expected_encoding: "7-bit",
+                    got_encoding: UNKNOWN
+                })
             }
-            if ( last==b'\r' ) != (byte == b'\n') {
-                return Err( ErrorKind::Invalide7BitSeq( byte ).into() )
+            if byte == 0 || ((last == b'\r') != (byte == b'\n')) {
+                ec_bail!(kind: Malformed)
             }
             last = byte;
         }
     }
-    Ok( TransferEncodedFileBuffer::buffer_is_encoded( buffer, TransferEncoding::_7Bit ) )
+    Ok(TransferEncodedFileBuffer::buffer_is_encoded( buffer, TransferEncoding::_7Bit))
 }
 
-fn encode_8bit( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
+fn encode_8bit(buffer: FileBuffer) -> Result<TransferEncodedFileBuffer, EncodingError> {
     {
         let data: &[u8] = &*buffer;
 
         let mut last = b'\0';
         for byte in data.iter().cloned() {
-            if  byte == 0 {
-                bail!( ErrorKind::Invalide8BitValue( byte ) );
-            }
-            if ( last==b'\r' ) != (byte == b'\n') {
-                bail!( ErrorKind::Invalide8BitSeq( byte ) );
+            if byte == 0 || (( last==b'\r' ) != (byte == b'\n')) {
+                ec_bail!(kind: Malformed)
             }
             last = byte;
         }
     }
-    Ok( TransferEncodedFileBuffer::buffer_is_encoded( buffer, TransferEncoding::_8Bit ) )
+    Ok(TransferEncodedFileBuffer::buffer_is_encoded(buffer, TransferEncoding::_8Bit))
 }
 
 /// to quote RFC 2045:
@@ -197,21 +200,25 @@ fn encode_8bit( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
 ///
 /// nevertheless there is at last one SMTP extension which allows this
 /// (chunked),but this library does not support it for now
-fn encode_binary( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
-    Ok( TransferEncodedFileBuffer::buffer_is_encoded( buffer, TransferEncoding::Binary ) )
+fn encode_binary(buffer: FileBuffer) -> Result<TransferEncodedFileBuffer, EncodingError> {
+    Ok( TransferEncodedFileBuffer::buffer_is_encoded(buffer, TransferEncoding::Binary))
 }
 
-fn encode_quoted_printable( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
-    Ok( TransferEncodedFileBuffer::buffer_is_encoded(
-        buffer.with_data( |data| quoted_printable::normal_encode( data ).into() ),
+fn encode_quoted_printable(buffer: FileBuffer)
+    -> Result<TransferEncodedFileBuffer, EncodingError>
+{
+    Ok(TransferEncodedFileBuffer::buffer_is_encoded(
+        buffer.with_data(|data| quoted_printable::normal_encode(data).into()),
         TransferEncoding::QuotedPrintable
-    ) )
+    ))
 }
 
-fn encode_base64( buffer: FileBuffer ) -> Result<TransferEncodedFileBuffer> {
-    Ok( TransferEncodedFileBuffer::buffer_is_encoded(
-        buffer.with_data( |data| base64::normal_encode(data).into_bytes() ),
+fn encode_base64( buffer: FileBuffer )
+    -> Result<TransferEncodedFileBuffer, EncodingError>
+{
+    Ok(TransferEncodedFileBuffer::buffer_is_encoded(
+        buffer.with_data(|data| base64::normal_encode(data).into_bytes()),
         TransferEncoding::Base64
-    ) )
+    ))
 }
 

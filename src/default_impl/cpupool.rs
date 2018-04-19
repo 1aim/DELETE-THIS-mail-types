@@ -26,7 +26,6 @@ impl OffloaderComponent for CpuPool {
 mod test {
     use futures::future;
     use futures_cpupool::Builder;
-    use core::error::Result;
     use super::*;
 
     #[test]
@@ -36,7 +35,7 @@ mod test {
     }
 
     fn _check_if_it_works<R: OffloaderComponent>(r: R) {
-        let res = r.offload(future::lazy(||-> Result<u32> { Ok(33u32) } )).wait();
+        let res = r.offload(future::lazy(||-> Result<u32,  ()> { Ok(33u32) } )).wait();
         let val = assert_ok!( res );
         assert_eq!( 33u32, val );
     }

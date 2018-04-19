@@ -1,20 +1,23 @@
 use std::path::{ PathBuf, Path };
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read};
 use std::env;
 use std::marker::PhantomData;
 
+use failure::Fail;
 use futures::{ future, IntoFuture};
 
-use core::utils::FileMeta;
-use core::error::{Result, Error};
-use context::{ResourceLoaderComponent, OffloaderComponent, Source, LoadResourceFuture};
-use file_buffer::FileBuffer;
-use ::{MediaType, IRI};
-use utils::{ConstSwitch, Enabled, Disabled};
+use common::utils::FileMeta;
+use headers::components::MediaType;
 
-// have a scheme ignoring variant for Mux as the schem is preset
-// allow a setup with different scheme path/file etc. the behaviour stays the same!
+use ::IRI;
+use ::utils::{ConstSwitch, Enabled, Disabled};
+use ::error::{ResourceLoadingError, ResourceLoadingErrorKind};
+use ::file_buffer::FileBuffer;
+use ::context::{ResourceLoaderComponent, OffloaderComponent, Source, LoadResourceFuture};
+
+// have a scheme ignoring variant for Mux as the scheme is preset
+// allow a setup with different scheme path/file etc. the behavior stays the same!
 // do not handle sandboxing/security as such do not handle "file" only "path" ~use open_at if available?~
 
 //TODO more doc
@@ -50,7 +53,7 @@ impl<SVSw, NLSw> FsResourceLoader<SVSw, NLSw>
         FsResourceLoader { root: root.into(), scheme, _marker: PhantomData}
     }
 
-    pub fn with_cwd_root() -> Result<Self> {
+    pub fn with_cwd_root() -> Result<Self, io::Error> {
         let cwd = env::current_dir()?;
         Ok(Self::new(cwd))
     }
@@ -82,9 +85,11 @@ impl<ValidateScheme, FixNewlines> ResourceLoaderComponent
         where O: OffloaderComponent
     {
         if ValidateScheme::ENABLED && !self.iri_has_compatible_scheme(&source.iri) {
-            //TODO typed error
-            let e: Error = "incompativle iri scheme".into();
-            return Box::new(Err(e).into_future());
+            let err = ResourceLoadingError
+                ::from(ResourceLoadingErrorKind::NotFound)
+                .with_source_iri_or_else(|| Some(source.iri.clone()));
+
+            return Box::new(Err(err).into_future());
         }
 
         let path = self.root().join(path_from_tail(&source.iri));
@@ -108,11 +113,19 @@ impl<ValidateScheme, FixNewlines> ResourceLoaderComponent
 fn load_file_buffer<
     FixNewlines: ConstSwitch
 >(path: PathBuf, media_type: Option<MediaType>, name: Option<String>)
-    -> Result<FileBuffer>
+    -> Result<FileBuffer, ResourceLoadingError>
 {
 
 
-    let mut fd = File::open(&path)?;
+    let mut fd = File::open(&path)
+        .map_err(|err| {
+            if err.kind() == io::ErrorKind::NotFound {
+                err.context(ResourceLoadingErrorKind::NotFound)
+            } else {
+                err.context(ResourceLoadingErrorKind::LoadingFailed)
+            }
+        })?;
+
     let mut file_meta = file_meta_from_metadata(fd.metadata()?);
     if let Some(name) = name {
         file_meta.file_name = Some(name)
@@ -139,13 +152,13 @@ fn load_file_buffer<
 
 }
 
-fn sniff_media_type(_buffer: &[u8]) -> Result<MediaType> {
+fn sniff_media_type(_buffer: &[u8]) -> Result<MediaType, ResourceLoadingError> {
     //TODO replace current stub impl with conservative_sniffing and move it to mail
     unimplemented!();
 }
 
 fn fix_newlines(buffer: Vec<u8>) -> Vec<u8> {
-    //TODO replace current stub impl with fix_newlines impl from mail-codec-composition
+    //TODO replace current stub impl with fix_newlines impl from mail-type-composition
     // and move fix_newlines to core
     let mut hit_cr = false;
     for bch in buffer.iter() {

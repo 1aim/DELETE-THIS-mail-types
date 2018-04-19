@@ -1,8 +1,8 @@
 use rand;
 use rand::Rng;
 
-use core::error::{Result, ErrorKind, ResultExt};
-use mheaders::components::MediaType;
+use headers::components::MediaType;
+use headers::error::ComponentCreationError;
 
 
 /// write a random sequence of chars valide for and boundary to the output buffer
@@ -66,13 +66,13 @@ pub fn create_random_boundary() -> String {
 }
 
 
-pub fn gen_multipart_media_type<A>(subtype: A ) -> Result<MediaType>
+pub fn gen_multipart_media_type<A>(subtype: A ) -> Result<MediaType, ComponentCreationError>
     where A: AsRef<str>
 {
     let boundary = create_random_boundary();
     let media_type = MediaType::new_with_params("multipart", subtype.as_ref(), vec![
         ("boundary", &*boundary)
-    ]).chain_err(|| ErrorKind::GeneratingMimeFailed)?;
+    ])?;
     Ok(media_type)
 }
 

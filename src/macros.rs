@@ -10,13 +10,13 @@ macro_rules! assert_ok {
     ($val:expr) => ({
         match $val {
             Ok( res ) => res,
-            Err( err ) => panic!( "expected Ok(..) got Err({:?})", err)
+            Err(err) => panic!( "expected Ok(..) got Err({:?})", err)
         }
     });
     ($val:expr, $ctx:expr) => ({
         match $val {
             Ok( res ) => res,
-            Err( err ) => panic!( "expected Ok(..) got Err({:?}) [ctx: {:?}]", err, $ctx)
+            Err(err) => panic!( "expected Ok(..) got Err({:?}) [ctx: {:?}]", err, $ctx)
         }
     });
 }

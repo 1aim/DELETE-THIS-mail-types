@@ -4,11 +4,10 @@ use std::fmt::Debug;
 use futures::{ future, Future, IntoFuture };
 use utils::SendBoxFuture;
 
-use core::error::*;
-
-use ::MediaType;
-use file_buffer::FileBuffer;
-use iri::IRI;
+use ::error::ResourceLoadingError;
+use ::headers::components::MediaType;
+use ::file_buffer::FileBuffer;
+use ::iri::IRI;
 
 /// POD containing the path from which a resource should be loaded as well as and
 /// optional media_type and name
@@ -96,7 +95,7 @@ pub trait BuilderContext: Clone + Send + Sync + 'static {
     }
 }
 
-pub type LoadResourceFuture = SendBoxFuture<FileBuffer, Error>;
+pub type LoadResourceFuture = SendBoxFuture<FileBuffer, ResourceLoadingError>;
 
 
 pub trait ResourceLoaderComponent: Debug + Send + Sync + 'static {

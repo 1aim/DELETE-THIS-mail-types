@@ -1,6 +1,10 @@
-use error::Error;
 
-/// A minimal IRI (International Resource Identitifier) implementation which just
+//TODO consider adding a str_context
+#[derive(Copy, Clone, Debug, Fail)]
+#[fail(display = "invalid syntax for iri/uri scheme")]
+pub struct InvalidIRIScheme;
+
+/// A minimal IRI (International Resource Identifier) implementation which just
 /// parses the scheme but no scheme specific part (and neither fragments wrt.
 /// those definitions in which fragments are not scheme specific parts).
 ///
@@ -12,7 +16,7 @@ use error::Error;
 /// # Example
 ///
 /// ```
-/// # use mail_codec::IRI;
+/// # use mail_type::IRI;
 /// let uri = IRI::new("file:/random/logo.png").unwrap();
 /// assert_eq!(uri.scheme(), "file");
 /// assert_eq!(uri.tail(), "/random/logo.png");
@@ -26,7 +30,7 @@ pub struct IRI {
 impl IRI {
 
     /// create a new IRI from a scheme part and a tail part
-    pub fn from_parts(scheme: &str, tail: &str) -> Result<Self, Error> {
+    pub fn from_parts(scheme: &str, tail: &str) -> Result<Self, InvalidIRIScheme> {
         Self::validate_scheme(scheme)?;
         let scheme_len = scheme.len();
         let mut buffer = String::with_capacity(scheme_len + 1 + tail.len());
@@ -41,16 +45,18 @@ impl IRI {
 
     /// crates a new a IRI
     ///
-    /// 1. this determines the first occurenc of `:` to split the input into scheme and tail
+    /// 1. this determines the first occurrence of `:` to split the input into scheme and tail
     /// 2. it validates that the scheme name is [RFC 3986](https://tools.ietf.org/html/rfc3986)
     ///    compatible, i.e. is ascii, starting with a letter followed by alpha numeric characters
     ///    (or `"+"`,`"-"`,`"."`).
     /// 3. converts the scheme part to lower case
-    pub fn new<I: Into<String>>(iri: I) -> Result<Self, Error> {
+    pub fn new<I>(iri: I) -> Result<Self, InvalidIRIScheme>
+        where I: Into<String>
+    {
         let mut buffer = iri.into();
         let split_pos = buffer.bytes().position(|b| b == b':')
             //TODO error type
-            .ok_or_else(|| -> Error { "invalid iri scheme".into()})?;
+            .ok_or_else(|| InvalidIRIScheme)?;
         {
             let scheme = &mut buffer[..split_pos];
             {
@@ -66,7 +72,7 @@ impl IRI {
         })
     }
 
-    fn validate_scheme(scheme: &str) -> Result<(), Error> {
+    fn validate_scheme(scheme: &str) -> Result<(), InvalidIRIScheme> {
         let mut iter = scheme.bytes();
         let valid = iter.next()
             .map(|bch| bch.is_ascii_alphabetic()).unwrap_or(false)
@@ -74,8 +80,7 @@ impl IRI {
                 bch.is_ascii_alphanumeric() || bch == b'+' || bch == b'-' || bch == b'.');
 
         if !valid {
-            //TODO error type
-            return Err("invalid iri scheme".into());
+            return Err(InvalidIRIScheme);
         }
         Ok(())
     }
@@ -85,7 +90,7 @@ impl IRI {
     /// # Example
     ///
     /// ```
-    /// # use mail_codec::IRI;
+    /// # use mail_type::IRI;
     /// let uri = IRI::new("file:///opt/share/logo.png").unwrap();
     /// assert_eq!(uri.scheme(), "file");
     /// ```
@@ -98,7 +103,7 @@ impl IRI {
     /// # Example
     ///
     /// ```
-    /// # use mail_codec::IRI;
+    /// # use mail_type::IRI;
     /// let uri = IRI::new("file:///opt/share/logo.png").unwrap();
     /// assert_eq!(uri.scheme(), "file");
     /// ```
