@@ -4,7 +4,7 @@ use std::fmt;
 use soft_ascii_string::SoftAsciiString;
 use futures::{ future, Future, Async, Poll };
 
-use common::encoder::{EncodableInHeader, Encoder};
+use common::encoder::{EncodableInHeader, EncodingBuffer};
 use headers::{
     HeaderTryInto, Header, HeaderMap,
     ContentType, _From,
@@ -182,7 +182,7 @@ impl<T> Future for MailFuture<T>
 
 impl EncodableMail {
 
-    pub fn encode(&self, encoder: &mut Encoder<Resource>) -> Result<(), MailError> {
+    pub fn encode(&self, encoder: &mut EncodingBuffer) -> Result<(), MailError> {
         encode::encode_mail(self, true, encoder)
     }
 

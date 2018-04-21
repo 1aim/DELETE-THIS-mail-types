@@ -8,15 +8,14 @@ use media_type::BOUNDARY;
 
 use common::error::{EncodingError, EncodingErrorKind, Place, UTF_8, US_ASCII};
 use common::encoder::{
-    Encoder, EncodableInHeader, EncodeHandle,
+    EncodingBuffer, EncodableInHeader, EncodingWriter,
 };
 use headers::{HeaderName, ContentType};
 use headers::error::{HeaderValidationError, BuildInValidationError};
 use ::error::MailError;
 
 use super::{
-    Mail, EncodableMail,
-    Resource,
+    Mail, EncodableMail
 };
 
 
@@ -29,7 +28,7 @@ use super::{
 pub fn encode_mail(
     mail: &EncodableMail,
     top: bool,
-    encoder: &mut Encoder<Resource>
+    encoder: &mut EncodingBuffer
 ) -> Result<(), MailError> {
     _encode_mail(&mail.0, top, encoder)
         .map_err(|err| {
@@ -46,12 +45,12 @@ pub fn encode_mail(
 fn _encode_mail(
     mail: &Mail,
     top: bool,
-    encoder: &mut Encoder<Resource>
+    encoder: &mut EncodingBuffer
 ) -> Result<(), MailError> {
     encode_headers(&mail, top, encoder)?;
 
     //the empty line between the headers and the body
-    encoder.add_blank_line();
+    encoder.write_blank_line();
 
     encode_mail_part(&mail, encoder)?;
 
@@ -66,9 +65,9 @@ fn _encode_mail(
 fn encode_headers(
     mail: &Mail,
     top: bool,
-    encoder:  &mut Encoder<Resource>
+    encoder:  &mut EncodingBuffer
 ) -> Result<(), MailError> {
-    let mut handle = encoder.encode_handle();
+    let mut handle = encoder.writer();
     if top {
         handle.write_str(SoftAsciiStr::from_str_unchecked(
             "MIME-Version: 1.0"
@@ -95,7 +94,7 @@ fn encode_headers(
 }
 
 fn encode_header(
-    handle: &mut EncodeHandle,
+    handle: &mut EncodingWriter,
     name: HeaderName,
     component: &EncodableInHeader
 ) -> Result<(), EncodingError> {
@@ -112,7 +111,7 @@ fn encode_header(
 /// if the body is not yet resolved use `Body::poll_body` or `IntoFuture`
 /// on `Mail` to prevent this from happening
 ///
-fn encode_mail_part(mail: &Mail, encoder:  &mut Encoder<Resource> )
+fn encode_mail_part(mail: &Mail, encoder:  &mut EncodingBuffer )
     -> Result<(), MailError>
 {
     let minus = SoftAsciiChar::from_char_unchecked('-');
@@ -120,11 +119,7 @@ fn encode_mail_part(mail: &Mail, encoder:  &mut Encoder<Resource> )
     use super::MailPart::*;
     match mail.body {
         SingleBody { ref body } => {
-            //Note: Resource is a Arc so cheap to clone
-            //TODO this should be changed to __writing__ the body,
-            //  if this is done a .map(|err| err.with_place_or_else(|| Place::Body))?;
-            //  should be added
-            encoder.add_body(body.clone());
+            encoder.write_body_unchecked(body)?;
         },
         MultipleBodies { ref hidden_text, ref bodies } => {
             if hidden_text.len() > 0 {

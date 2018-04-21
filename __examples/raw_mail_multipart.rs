@@ -24,7 +24,7 @@ fn main() {
 }
 
 fn _main() -> Result<()> {
-    let mut encoder = Encoder::new( MailType::Ascii );
+    let mut encoder = EncodingBuffer::new( MailType::Ascii );
 
     let resource_loader: FsResourceLoader = FsResourceLoader::with_cwd_root().unwrap();
     let builder_ctx = CompositeBuilderContext::new(

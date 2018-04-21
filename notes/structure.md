@@ -39,7 +39,7 @@ This crate provides parts used by all other parts using
 the `encode`/`parse` features encoding/parsing specific
 parts are enabled/disabled. (Currently it's just encoding).
 
-Parts included are the Encoder, HeaderMap, Header traits,
+Parts included are the EncodingBuffer, HeaderMap, Header traits,
 encoding traits, bindings to other encoding libraries like
 base64, percent-encode and similar.
 
@@ -67,7 +67,7 @@ handle aspects like e.g. which multipart content type
 is used, and how they are structured.
 
 Additional to the Mail struct it provides a mechanism
-to encode the Mail struct with the Encoder provided
+to encode the Mail struct with the EncodingBuffer provided
 by `mail-core` produceing a mail in form of a
 string, ascii-string or bytes a required by the consumer.
 (the encoder does know about 7bit, 8bit and utf8 i.e.

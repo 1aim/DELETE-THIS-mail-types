@@ -31,7 +31,7 @@ fn _main() -> Result<()> {
         CpuPoolBuilder::new().create()
     );
 
-    let mut encoder = Encoder::new( MailType::Ascii );
+    let mut encoder = EncodingBuffer::new( MailType::Ascii );
 
     let opt_name: Option<&'static str> = None;
     let headers = headers! {
