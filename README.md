@@ -1,5 +1,5 @@
 
-# mail-type &emsp; [![Build Status](https://travis-ci.org/1aim/mail_type.svg?branch=master)](https://travis-ci.org/1aim/mail_type)
+# mail-types &emsp; [![Build Status](https://travis-ci.org/1aim/mail_types.svg?branch=master)](https://travis-ci.org/1aim/mail_types)
 
 **TODO**
 
@@ -8,7 +8,7 @@
 TODO
 
 
-Documentation can be [viewed on docs.rs](https://docs.rs/mail-type).
+Documentation can be [viewed on docs.rs](https://docs.rs/mail-types).
 
 
 ## License

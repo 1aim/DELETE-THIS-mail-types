@@ -1,5 +1,5 @@
 [package]
-name = "mail-type"
+name = "mail-types"
 version = "0.2.0"
 description = "[internal/mail-api] provides the Mail type for the mail-api crates (inkl. multipart mime bodies, builder and resource type)"
 authors = ["Philipp Korber <p.korber@1aim.com>"]
@@ -7,8 +7,8 @@ keywords = ["mail-api", "internal"]
 categories = []
 license = "MIT OR Apache-2.0"
 readme = "./README.md"
-documentation = "https://docs.rs/mail-type"
-repository = "https://github.com/1aim/mail-type"
+documentation = "https://docs.rs/mail-types"
+repository = "https://github.com/1aim/mail-types"
 
 
 [dependencies]

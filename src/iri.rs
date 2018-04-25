@@ -16,7 +16,7 @@ pub struct InvalidIRIScheme;
 /// # Example
 ///
 /// ```
-/// # use mail_type::IRI;
+/// # use mail_types::IRI;
 /// let uri = IRI::new("file:/random/logo.png").unwrap();
 /// assert_eq!(uri.scheme(), "file");
 /// assert_eq!(uri.tail(), "/random/logo.png");
@@ -90,7 +90,7 @@ impl IRI {
     /// # Example
     ///
     /// ```
-    /// # use mail_type::IRI;
+    /// # use mail_types::IRI;
     /// let uri = IRI::new("file:///opt/share/logo.png").unwrap();
     /// assert_eq!(uri.scheme(), "file");
     /// ```
@@ -103,7 +103,7 @@ impl IRI {
     /// # Example
     ///
     /// ```
-    /// # use mail_type::IRI;
+    /// # use mail_types::IRI;
     /// let uri = IRI::new("file:///opt/share/logo.png").unwrap();
     /// assert_eq!(uri.scheme(), "file");
     /// ```

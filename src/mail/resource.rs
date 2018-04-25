@@ -397,9 +397,9 @@ impl Resource {
     /// # Example
     /// ```
     /// # extern crate futures;
-    /// # extern crate mail_type;
-    /// # use mail_type::{Resource, ResourceAccessGuard};
-    /// # use mail_type::context::BuilderContext;
+    /// # extern crate mail_types;
+    /// # use mail_types::{Resource, ResourceAccessGuard};
+    /// # use mail_types::context::BuilderContext;
     /// # use futures::Future;
     /// fn load_resource_blocking<C>(resource: &Resource, ctx: C) -> ResourceAccessGuard
     ///     where C: BuilderContext

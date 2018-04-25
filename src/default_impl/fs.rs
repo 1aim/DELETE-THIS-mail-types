@@ -158,7 +158,7 @@ fn sniff_media_type(_buffer: &[u8]) -> Result<MediaType, ResourceLoadingError> {
 }
 
 fn fix_newlines(buffer: Vec<u8>) -> Vec<u8> {
-    //TODO replace current stub impl with fix_newlines impl from mail-type-composition
+    //TODO replace current stub impl with fix_newlines impl from mail-template
     // and move fix_newlines to core
     let mut hit_cr = false;
     for bch in buffer.iter() {
