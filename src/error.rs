@@ -5,6 +5,7 @@ use failure::{Fail, Context, Backtrace};
 
 use common::error::EncodingError;
 use headers::error::{
+    BuildInValidationError,
     HeaderTypeError, ComponentCreationError,
     HeaderInsertionError, HeaderValidationError
 };
@@ -223,6 +224,17 @@ pub enum MailError {
     ResourceLoading(ResourceLoadingError)
 }
 
+impl From<BuildInValidationError> for MailError {
+    fn from(err: BuildInValidationError) -> Self {
+        MailError::Validation(err.into())
+    }
+}
+
+impl From<HeaderTypeError> for MailError {
+    fn from(err: HeaderTypeError) -> Self {
+        MailError::Creation(BuilderError::Type(err))
+    }
+}
 
 impl From<EncodingError> for MailError {
     fn from(err: EncodingError) -> Self {
