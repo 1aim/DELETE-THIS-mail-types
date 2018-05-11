@@ -182,16 +182,17 @@ impl Builder {
 impl SinglepartBuilder {
 
     pub fn header<H, C>(
-        &mut self,
+        mut self,
         header: H,
         hbody: C
-    ) -> Result<usize, BuilderError>
+    ) -> Result<Self, BuilderError>
         where H: Header,
               H::Component: EncodableInHeader,
               C: HeaderTryInto<H::Component>
     {
         let comp = hbody.try_into()?;
-        self.inner.header(header, comp, false)
+        self.inner.header(header, comp, false)?;
+        Ok(self)
     }
 
     pub fn headers(mut self, headers: HeaderMap) -> Result<Self, BuilderError> {
