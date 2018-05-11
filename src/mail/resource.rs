@@ -12,6 +12,7 @@ use futures::task;
 
 use common::error::{EncodingError, EncodingErrorKind};
 use common::encoder::BodyBuffer;
+use headers::components::MediaType;
 
 use ::error::{
     ResourceError, ResourceLoadingError,
@@ -328,6 +329,13 @@ impl Resource {
     /// so that it's data can then be accessed
     pub fn new(source: Source) -> Self {
         Resource::_new(ResourceState::NotLoaded, Some(source))
+    }
+
+    /// create a sourceless Resource from a string (content type is `text/plain; charset=utf-8`)
+    pub fn sourceless_from_string(content: impl Into<String>) -> Self {
+        let content_type = MediaType::parse("text/plain; charset=utf-8").unwrap();
+        let buffer = FileBuffer::new(content_type, content.into().into());
+        Resource::sourceless_from_buffer(buffer)
     }
 
     /// This constructor allow crating a Resource from a FileBuffer without providing a source IRI
