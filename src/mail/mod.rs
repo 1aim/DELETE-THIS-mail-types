@@ -4,6 +4,7 @@ use std::fmt;
 use soft_ascii_string::SoftAsciiString;
 use futures::{ future, Future, Async, Poll };
 
+use common::MailType;
 use common::encoder::{EncodableInHeader, EncodingBuffer};
 use headers::{
     HeaderTryInto, Header, HeaderMap,
@@ -184,6 +185,12 @@ impl EncodableMail {
 
     pub fn encode(&self, encoder: &mut EncodingBuffer) -> Result<(), MailError> {
         encode::encode_mail(self, true, encoder)
+    }
+
+    pub fn encode_into_bytes(&self, mail_type: MailType) -> Result<Vec<u8>, MailError> {
+        let mut buffer = EncodingBuffer::new(mail_type);
+        self.encode(&mut buffer)?;
+        Ok(buffer.into())
     }
 
     fn from_loaded_mail(mut mail: Mail, anti_unload_guards: Vec<ResourceAccessGuard>)
