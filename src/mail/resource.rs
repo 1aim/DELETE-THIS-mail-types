@@ -332,6 +332,9 @@ impl Resource {
     }
 
     /// create a sourceless Resource from a string (content type is `text/plain; charset=utf-8`)
+    ///
+    /// **Important:** this method does _not_ automatically convert `"\n"` to `"\r\n"` but mail
+    ///  uses `"\r\n" exclusively
     pub fn sourceless_from_string(content: impl Into<String>) -> Self {
         let content_type = MediaType::parse("text/plain; charset=utf-8").unwrap();
         let buffer = FileBuffer::new(content_type, content.into().into());
