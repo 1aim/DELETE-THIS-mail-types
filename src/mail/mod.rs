@@ -110,7 +110,7 @@ impl Mail {
         -> Result<(), BuilderError>
     {
         check_multiple_headers(&headers, self.body.is_multipart())?;
-        self.headers.try_extend(headers)?;
+        self.headers.combine(headers);
         Ok(())
     }
 

@@ -7,7 +7,7 @@ use common::error::EncodingError;
 use headers::error::{
     BuildInValidationError,
     HeaderTypeError, ComponentCreationError,
-    HeaderInsertionError, HeaderValidationError
+    HeaderValidationError
 };
 use ::IRI;
 // errors from loading a Resource (which includes encoding it's body)
@@ -198,16 +198,6 @@ impl From<ComponentCreationError> for BuilderError {
     }
 }
 
-impl From<HeaderInsertionError> for BuilderError {
-    fn from(err: HeaderInsertionError) -> Self {
-        use self::HeaderInsertionError::*;
-        match err {
-            Type(err) => BuilderError::Type(err),
-            Component(err) => BuilderError::Component(err)
-        }
-    }
-}
-
 
 #[derive(Debug, Fail)]
 pub enum MailError {
@@ -269,8 +259,8 @@ impl From<ResourceError> for MailError {
     }
 }
 
-impl From<HeaderInsertionError> for MailError {
-    fn from(err: HeaderInsertionError) -> Self {
+impl From<ComponentCreationError> for MailError {
+    fn from(err: ComponentCreationError) -> Self {
         MailError::from(BuilderError::from(err))
     }
 }

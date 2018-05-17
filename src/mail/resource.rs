@@ -346,8 +346,8 @@ impl Resource {
     /// This is useful in combination with e.g. "on-the-fly" generated resources. A Resource
     /// created this way can not be unloaded, as such this preferably should only be used with
     /// "one-use" resources which do not need to be cached.
-    pub fn sourceless_from_buffer( buffer: FileBuffer ) -> Self {
-        Self::_new( ResourceState::Loaded( buffer ), None )
+    pub fn sourceless_from_buffer(buffer: FileBuffer) -> Self {
+        Self::_new(ResourceState::Loaded(buffer), None)
     }
 
     /// This constructor allow crating a Resource from a Future resolving to a FileBuffer
