@@ -2,23 +2,31 @@ use std::path::Path;
 use std::env;
 
 use futures::Future;
-
+use soft_ascii_string::SoftAsciiString;
 use mail_types::file_buffer::FileBuffer;
-use headers::components::MediaType;
+use headers::components::{MediaType, Domain};
 use mail_types::{
     Resource,
     IRI,
     Source,
     ResourceStateInfo
 };
-use mail_types::context::CompositeBuilderContext;
-use mail_types::default_impl::{FsResourceLoader, simple_cpu_pool };
+use mail_types::context::CompositeContext;
+use mail_types::default_impl::{FsResourceLoader, simple_cpu_pool, HashedIdGen, simple_context};
+
+fn dumy_ctx(resource_loader: FsResourceLoader) -> simple_context::Context {
+    let domain = Domain::from_unchecked("hy.test".to_owned());
+    let unique_part = SoftAsciiString::from_string_unchecked("w09ad8f");
+    let id_gen = HashedIdGen::new(domain, unique_part).unwrap();
+    CompositeContext::new(resource_loader, simple_cpu_pool(), id_gen)
+}
 
 fn loaded_resource(path: &str, media_type: &str, name: Option<&str>) -> Resource {
     let resource_loader: FsResourceLoader = FsResourceLoader::new(
         env::current_dir().unwrap().join(Path::new("./test_resources/"))
     );
-    let ctx = CompositeBuilderContext::new(resource_loader, simple_cpu_pool());
+
+    let ctx = dumy_ctx(resource_loader);
 
 
     let source = Source {

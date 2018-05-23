@@ -18,7 +18,7 @@ use headers::error::{
 };
 
 use ::error::{MailError, BuilderError};
-use ::context::BuilderContext;
+use ::context::Context;
 
 use self::builder::{ check_header, check_multiple_headers };
 pub use self::builder::{ Builder, MultipartBuilder, SinglepartBuilder };
@@ -71,7 +71,7 @@ pub enum MailPart {
 /// - if a contextual validator fails, e.g. `From` header is missing or
 ///   there is a multi mailbox `From` header but no `Sender` header
 ///
-pub struct MailFuture<T: BuilderContext> {
+pub struct MailFuture<T: Context> {
     mail: Option<Mail>,
     inner: future::JoinAll<Vec<ResourceLoadingFuture<T>>>,
 }
@@ -125,7 +125,7 @@ impl Mail {
     //TODO potentially change it into as_encodable_mail(&mut self)
     /// Turns the mail into a future with resolves to an `EncodeableMail`
     ///
-    pub fn into_encodeable_mail<C: BuilderContext>(self, ctx: &C ) -> MailFuture<C> {
+    pub fn into_encodeable_mail<C: Context>(self, ctx: &C ) -> MailFuture<C> {
         let mut futures = Vec::new();
         //FIXME[rust/! type]: use ! instead of (),
         // alternatively use futures::Never if futures >= 0.2
@@ -168,7 +168,7 @@ impl MailPart {
 
 
 impl<T> Future for MailFuture<T>
-    where T: BuilderContext,
+    where T: Context,
 {
     type Item = EncodableMail;
     type Error = MailError;
@@ -295,7 +295,7 @@ mod test {
         use super::{AssertDebug, AssertSend, AssertSync};
 
         fn load_blocking<C>(r: &Resource, ctx: &C) -> ResourceAccessGuard
-            where C: BuilderContext
+            where C: Context
         {
             r.create_loading_future(ctx.clone()).wait().unwrap()
         }

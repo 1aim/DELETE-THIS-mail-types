@@ -1,10 +1,4 @@
 
-#[cfg(test)]
-use context::CompositeBuilderContext;
-#[cfg(test)]
-use futures_cpupool as _cpupool;
-
-
 #[cfg(feature="default_impl_cpupool")]
 mod cpupool;
 #[cfg(feature="default_impl_cpupool")]
@@ -16,6 +10,11 @@ mod fs;
 #[cfg(feature="default_impl_fs")]
 pub use self::fs::*;
 
+#[cfg(feature="default_impl_message_id_gen")]
+mod message_id_gen;
+#[cfg(feature="default_impl_message_id_gen")]
+pub use self::message_id_gen::*;
+
 
 #[cfg(all(feature="default_impl_fs", feature="default_impl_cpupool"))]
 pub mod simple_context;
@@ -23,20 +22,25 @@ pub mod simple_context;
 #[cfg(all(
     test,
     not(feature="default_impl_cpupool"),
-    not(feature="default_impl_fs")))]
-compile_error!("test need following (default) features: default_impl_cpupool, default_impl_fs");
+    not(feature="default_impl_fs"),
+    not(feature="default_impl_message_id_gen")))]
+compile_error!("test need following (default) features: default_impl_cpupool, default_impl_fs, default_impl_message_id_gen");
 
 #[cfg(test)]
-pub type TestContext = CompositeBuilderContext<FsResourceLoader, _cpupool::CpuPool>;
+use soft_ascii_string::SoftAsciiString;
+#[cfg(test)]
+use headers::components::Domain;
+
+#[cfg(test)]
+pub type TestContext = simple_context::Context;
 
 //same crate so we can do this ;=)
 #[cfg(test)]
 pub fn test_context() -> TestContext {
     //TODO crate a test context which does not access the file system
-    CompositeBuilderContext::new(
-        FsResourceLoader::with_cwd_root().unwrap(),
-        _cpupool::Builder::new().create()
-    )
+    let domain = Domain::from_unchecked("fooblabar.test".to_owned());
+    let unique_part = SoftAsciiString::from_string_unchecked("CM0U3c412");
+    simple_context::new(domain, unique_part).unwrap()
 }
 
 

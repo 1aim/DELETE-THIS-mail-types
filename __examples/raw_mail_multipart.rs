@@ -9,7 +9,7 @@ use futures_cpupool::{Builder as CpuPoolBuilder};
 
 use mail::error::Result;
 use mail::prelude::*;
-use mail::context::CompositeBuilderContext;
+use mail::context::CompositeContext;
 use mail::default_impl::FsResourceLoader;
 use mail::file_buffer::FileBuffer;
 
@@ -27,7 +27,7 @@ fn _main() -> Result<()> {
     let mut encoder = EncodingBuffer::new( MailType::Ascii );
 
     let resource_loader: FsResourceLoader = FsResourceLoader::with_cwd_root().unwrap();
-    let builder_ctx = CompositeBuilderContext::new(
+    let builder_ctx = CompositeContext::new(
         resource_loader,
         CpuPoolBuilder::new().create()
     );

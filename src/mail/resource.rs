@@ -21,7 +21,7 @@ use ::error::{
 };
 use ::utils::SendBoxFuture;
 use ::file_buffer::{FileBuffer, TransferEncodedFileBuffer};
-use super::context::{BuilderContext, Source};
+use super::context::{Context, Source};
 
 /// A Resource represent something which can be a body (part) of a Mail.
 ///
@@ -249,7 +249,7 @@ pub struct Guard<'lock> {
 
 /// Future driving the (internal) loading of a Resource resolving to a `ResourceAccessGuard`
 #[derive(Debug)]
-pub struct ResourceLoadingFuture<C: BuilderContext> {
+pub struct ResourceLoadingFuture<C: Context> {
     /// makes sure the Resource is keept alive and allows us to access/poll it
     inner: Arc<ResourceInner>,
     /// the context we use to 1. "load" the resource data,  2. offload the encoding
@@ -410,17 +410,17 @@ impl Resource {
     /// # extern crate futures;
     /// # extern crate mail_types;
     /// # use mail_types::{Resource, ResourceAccessGuard};
-    /// # use mail_types::context::BuilderContext;
+    /// # use mail_types::context::Context;
     /// # use futures::Future;
     /// fn load_resource_blocking<C>(resource: &Resource, ctx: C) -> ResourceAccessGuard
-    ///     where C: BuilderContext
+    ///     where C: Context
     /// {
     ///     resource.create_loading_future(ctx).wait().expect("loading failed")
     /// }
     /// # fn main() {}
     /// ```
     pub fn create_loading_future<C>(&self, ctx: C) -> ResourceLoadingFuture<C>
-        where C: BuilderContext
+        where C: Context
     {
         ResourceLoadingFuture::new(self.clone(), ctx)
     }
@@ -688,7 +688,7 @@ impl ResourceState {
     /// and offloads the transfer encoding of the data with `ctx.offload_fn`/`ctx.offload`
     fn poll_encoding_completion<C>(self, source: &Option<Source>, ctx: &C)
                                    -> Result<(ResourceState, Async<()>), ResourceError>
-        where C: BuilderContext
+        where C: Context
     {
         use self::ResourceState::*;
         let mut continue_with = self;
@@ -809,7 +809,7 @@ macro_rules! make_done {
 }
 
 impl<C> ResourceLoadingFuture<C>
-    where C: BuilderContext
+    where C: Context
 {
     /// creates a new future from a resource and a context
     fn new(resource: Resource, ctx: C) -> Self {
@@ -911,7 +911,7 @@ impl<C> ResourceLoadingFuture<C>
 
 
 impl<C> Drop for ResourceLoadingFuture<C>
-    where C: BuilderContext
+    where C: Context
 {
     /// cancels the future if it is dropped before cancelation
     fn drop(&mut self) {
@@ -926,7 +926,7 @@ impl<C> Drop for ResourceLoadingFuture<C>
 }
 
 impl<C> Future for ResourceLoadingFuture<C>
-    where C: BuilderContext
+    where C: Context
 {
     type Item = ResourceAccessGuard;
     type Error = ResourceError;
@@ -1077,7 +1077,7 @@ mod test {
     use utils::timeout;
 
 
-    fn resolve_resource<C: BuilderContext+Debug>( resource: &mut Resource, ctx: &C ) {
+    fn resolve_resource<C: Context+Debug>( resource: &mut Resource, ctx: &C ) {
         let res = resource
             .create_loading_future(ctx.clone())
             .select2( timeout( 1, 0 ) )
