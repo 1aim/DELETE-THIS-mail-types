@@ -73,6 +73,7 @@ pub enum MailPart {
 ///
 pub struct MailFuture<T: Context> {
     mail: Option<Mail>,
+    ctx: T,
     inner: future::JoinAll<Vec<ResourceLoadingFuture<T>>>,
 }
 
@@ -125,7 +126,7 @@ impl Mail {
     //TODO potentially change it into as_encodable_mail(&mut self)
     /// Turns the mail into a future with resolves to an `EncodeableMail`
     ///
-    pub fn into_encodeable_mail<C: Context>(self, ctx: &C ) -> MailFuture<C> {
+    pub fn into_encodeable_mail<C: Context>(self, ctx: C) -> MailFuture<C> {
         let mut futures = Vec::new();
         //FIXME[rust/! type]: use ! instead of (),
         // alternatively use futures::Never if futures >= 0.2
@@ -134,8 +135,9 @@ impl Mail {
         }).unwrap();
 
         MailFuture {
+            ctx,
             inner: future::join_all(futures),
-            mail: Some( self )
+            mail: Some(self)
         }
     }
 
@@ -176,7 +178,7 @@ impl<T> Future for MailFuture<T>
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
         let anti_unload_guards = try_ready!(self.inner.poll());
         let mail = self.mail.take().unwrap();
-        let enc_mail = EncodableMail::from_loaded_mail(mail, anti_unload_guards)?;
+        let enc_mail = EncodableMail::from_loaded_mail(mail, anti_unload_guards, &self.ctx)?;
         Ok(Async::Ready(enc_mail))
     }
 }
@@ -193,24 +195,20 @@ impl EncodableMail {
         Ok(buffer.into())
     }
 
-    fn from_loaded_mail(mut mail: Mail, anti_unload_guards: Vec<ResourceAccessGuard>)
+    fn from_loaded_mail(
+        mut mail: Mail,
+        anti_unload_guards: Vec<ResourceAccessGuard>,
+        ctx: &impl Context
+    )
         -> Result<Self, MailError>
     {
-        insert_generated_headers(&mut mail)?;
-        // also insert `Date` if needed, but only on the outer most header map
-        if !mail.headers.contains(Date) {
-            mail.headers.insert(Date, DateTime::now())?;
-        }
+        recursively_insert_generated_headers(&mut mail)?;
+
+        auto_gen_top_level_only_headers(&mut mail.headers, ctx)?;
+
+        check_required_headers(&mail.headers)?;
 
         mail.headers.use_contextual_validators()?;
-
-        // also check `From` only on the outer most header map
-        if !mail.headers.contains(_From) {
-            return Err(HeaderValidationError::from(BuildInValidationError::NoFrom).into());
-        }
-        if !mail.headers.contains(MessageId) {
-            warn!("mail without MessageId")
-        }
 
         Ok(EncodableMail(mail, anti_unload_guards))
     }
@@ -219,19 +217,35 @@ impl EncodableMail {
 /// inserts ContentType and ContentTransferEncoding into
 /// the headers of any contained `MailPart::SingleBody`,
 /// based on the `Resource` representing the body
-fn insert_generated_headers(mail: &mut Mail) -> Result<(), MailError> {
+fn recursively_insert_generated_headers(mail: &mut Mail) -> Result<(), MailError> {
     match mail.body {
         MailPart::SingleBody { ref body } => {
            auto_gen_headers(&mut mail.headers, body)?;
         }
         MailPart::MultipleBodies { ref mut bodies, .. } => {
             for sub_mail in bodies {
-                insert_generated_headers(sub_mail)?;
+                recursively_insert_generated_headers(sub_mail)?;
             }
         }
 
     }
     Ok(())
+}
+
+/// check if headers which are generally required are in the header map
+///
+/// Normally constraints are checked through the validators, but this won't
+/// work if there is no guarantee the validator was inserted. This only applies
+/// for `Date`, `From` as they have to appear once no matter what. But `Date`
+/// is auto generated so only `From` is checked here.
+/// The only required headers are `From` and `Date`, all other quantitative
+/// constraints can be checked with contextual validators,
+fn check_required_headers(headers: &HeaderMap) -> Result<(), MailError> {
+    if headers.contains(_From) {
+        Ok(())
+    } else {
+        Err(HeaderValidationError::from(BuildInValidationError::NoFrom).into())
+    }
 }
 
 fn auto_gen_headers(headers: &mut HeaderMap, body: &Resource) -> Result<(), MailError> {
@@ -240,6 +254,20 @@ fn auto_gen_headers(headers: &mut HeaderMap, body: &Resource) -> Result<(), Mail
 
     headers.insert(ContentType, file_buffer.content_type().clone())?;
     headers.insert(ContentTransferEncoding, file_buffer.transfer_encoding().clone())?;
+    Ok(())
+}
+
+fn auto_gen_top_level_only_headers(headers: &mut HeaderMap, ctx: &impl Context)
+    -> Result<(), MailError>
+{
+    if !headers.contains(Date) {
+        headers.insert(Date, DateTime::now())?;
+    }
+
+    if !headers.contains(MessageId) {
+        headers.insert(MessageId, ctx.get_message_id())?;
+    }
+
     Ok(())
 }
 
@@ -460,7 +488,7 @@ mod test {
             };
 
             let ctx = test_context();
-            let enc_mail = assert_ok!(mail.into_encodeable_mail(&ctx).wait());
+            let enc_mail = assert_ok!(mail.into_encodeable_mail(ctx).wait());
 
             let headers: &HeaderMap = enc_mail.headers();
             assert!(headers.contains(_From));
@@ -468,6 +496,8 @@ mod test {
             assert!(headers.contains(Date));
             assert!(headers.contains(ContentType));
             assert!(headers.contains(ContentTransferEncoding));
+            assert!(headers.contains(MessageId));
+            assert_eq!(headers.len(), 6);
 
             let res = headers.get_single(ContentType)
                 .unwrap()
@@ -503,7 +533,7 @@ mod test {
             };
 
             let ctx = test_context();
-            let mail = mail.into_encodeable_mail(&ctx).wait().unwrap();
+            let mail = mail.into_encodeable_mail(ctx).wait().unwrap();
 
             assert!(mail.headers().contains(_From));
             assert!(mail.headers().contains(Subject));
@@ -543,7 +573,7 @@ mod test {
             };
 
             let ctx = test_context();
-            assert_err!(mail.into_encodeable_mail(&ctx).wait());
+            assert_err!(mail.into_encodeable_mail(ctx).wait());
         }
 
         #[test]
@@ -556,7 +586,7 @@ mod test {
             };
 
             let ctx = test_context();
-            assert_err!(mail.into_encodeable_mail(&ctx).wait());
+            assert_err!(mail.into_encodeable_mail(ctx).wait());
         }
 
         #[test]
@@ -572,7 +602,7 @@ mod test {
             };
 
             let ctx = test_context();
-            let enc_mail = assert_ok!(mail.into_encodeable_mail(&ctx).wait());
+            let enc_mail = assert_ok!(mail.into_encodeable_mail(ctx).wait());
             let used_date = enc_mail.headers()
                 .get_single(Date)
                 .unwrap()
