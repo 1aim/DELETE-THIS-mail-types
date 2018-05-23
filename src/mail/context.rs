@@ -77,10 +77,7 @@ pub trait Context: Clone + Send + Sync + 'static {
     /// trait also implements RunElsewhere it simple doable by using `RunElsewhere::execute`.
     fn load_resource(&self, &Source) -> LoadResourceFuture;
 
-    /// returns the same unique message id
-    ///
-    /// Use the resulting instance of `for_new_mail`
-    /// to get a different unique message id.
+    /// generate a unique content id
     ///
     /// As message id's are used to reference messages they should be
     /// world unique this can be guaranteed through two aspects:
@@ -94,7 +91,7 @@ pub trait Context: Clone + Send + Sync + 'static {
     ///    stays unique even if you run multiple instances or restart the current
     ///    running instance.
     ///
-    fn get_message_id(&self) -> MessageId;
+    fn generate_message_id(&self) -> MessageId;
 
     /// generate a unique content id
     ///
@@ -127,12 +124,6 @@ pub trait Context: Clone + Send + Sync + 'static {
         self.offload( future::lazy( func ) )
     }
 
-    /// turn this context into a context for a new mail
-    ///
-    /// This can be used to e.g. have a scheme for content
-    /// id's which shares a same part in all content id's
-    /// in the same mail, but only there.
-    fn for_new_mail(&self) -> Self;
 }
 
 pub type LoadResourceFuture = SendBoxFuture<FileBuffer, ResourceLoadingError>;
@@ -157,16 +148,13 @@ pub trait MailIdGenComponent: Debug + Send + Sync + 'static {
     /// returns the same unique message id
     ///
     /// see `Context::generate_message_id` for more details
-    fn get_message_id(&self) -> MessageId;
+    fn generate_message_id(&self) -> MessageId;
 
     //TODO doc: link method
     /// generates a new content id
     ///
     /// see `Context::generate_content_id` for more details
     fn generate_content_id(&self) -> ContentId;
-
-    /// generate a new instance of itself for usage with a new mail
-    fn for_new_mail(_self: &Arc<Self>) -> Arc<Self>;
 }
 
 
@@ -176,8 +164,7 @@ pub struct CompositeContext<
     O: OffloaderComponent,
     M: MailIdGenComponent
 >{
-    inner: Arc<(R, O)>,
-    id_gen: Arc<M>
+    inner: Arc<(R, O, M)>,
 }
 
 impl<R, O, M> Clone for CompositeContext<R, O, M>
@@ -188,7 +175,6 @@ impl<R, O, M> Clone for CompositeContext<R, O, M>
     fn clone(&self) -> Self {
         CompositeContext {
             inner: self.inner.clone(),
-            id_gen:  self.id_gen.clone()
         }
     }
 }
@@ -200,8 +186,7 @@ impl<R, O, M> CompositeContext<R, O, M>
 {
     pub fn new(resource_loader: R, offloader: O, message_id_gen: M) -> Self {
         CompositeContext {
-            inner: Arc::new((resource_loader, offloader)),
-            id_gen: Arc::new(message_id_gen)
+            inner: Arc::new((resource_loader, offloader, message_id_gen)),
         }
     }
 
@@ -214,7 +199,7 @@ impl<R, O, M> CompositeContext<R, O, M>
     }
 
     pub fn id_gen(&self) -> &M {
-        &self.id_gen
+        &self.inner.2
     }
 }
 
@@ -240,15 +225,8 @@ impl<R, O, M> Context for CompositeContext<R, O, M>
         self.id_gen().generate_content_id()
     }
 
-    fn get_message_id(&self) -> MessageId {
-        self.id_gen().get_message_id()
-    }
-
-    fn for_new_mail(&self) -> Self {
-        CompositeContext {
-            inner: self.inner.clone(),
-            id_gen: M::for_new_mail(&self.id_gen)
-        }
+    fn generate_message_id(&self) -> MessageId {
+        self.id_gen().generate_message_id()
     }
 
 }

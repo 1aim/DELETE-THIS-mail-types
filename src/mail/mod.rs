@@ -265,7 +265,7 @@ fn auto_gen_top_level_only_headers(headers: &mut HeaderMap, ctx: &impl Context)
     }
 
     if !headers.contains(MessageId) {
-        headers.insert(MessageId, ctx.get_message_id())?;
+        headers.insert(MessageId, ctx.generate_message_id())?;
     }
 
     Ok(())
