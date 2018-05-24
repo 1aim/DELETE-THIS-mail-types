@@ -35,14 +35,6 @@ version = "0.1.5"
 serde_json = "1.0.2"
 
 [features]
-default = ["default_impl"]
-default_impl =  [
-    "default_impl_cpupool",
-    "default_impl_fs",
-    "default_impl_message_id_gen"
-]
-default_impl_cpupool = ["futures-cpupool" ]
-default_impl_fs = []
-default_impl_message_id_gen = []
+default = ["default_impl_cpupool"]
+default_impl_cpupool = ["futures-cpupool"]
 
-traceing = [ "mail-common/traceing", "mail-headers/traceing" ]

@@ -4,26 +4,17 @@ mod cpupool;
 #[cfg(feature="default_impl_cpupool")]
 pub use self::cpupool::*;
 
-
-#[cfg(feature="default_impl_fs")]
 mod fs;
-#[cfg(feature="default_impl_fs")]
 pub use self::fs::*;
 
-#[cfg(feature="default_impl_message_id_gen")]
 mod message_id_gen;
-#[cfg(feature="default_impl_message_id_gen")]
 pub use self::message_id_gen::*;
 
 
-#[cfg(all(feature="default_impl_fs", feature="default_impl_cpupool"))]
+#[cfg(all(feature="default_impl_cpupool"))]
 pub mod simple_context;
 
-#[cfg(all(
-    test,
-    not(feature="default_impl_cpupool"),
-    not(feature="default_impl_fs"),
-    not(feature="default_impl_message_id_gen")))]
+#[cfg(all(test, not(feature="default_impl_cpupool")))]
 compile_error!("test need following (default) features: default_impl_cpupool, default_impl_fs, default_impl_message_id_gen");
 
 #[cfg(test)]
