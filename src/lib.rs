@@ -33,4 +33,4 @@ pub mod default_impl;
 
 pub use self::iri::IRI;
 pub use self::mail::*;
-pub use ::context::Source;
+pub use ::context::{Context, Source};
