@@ -33,17 +33,13 @@ pub struct Source {
     pub use_name: Option<String>
 }
 
-// Future versions could consider allowing non static non clone context
-// making Resource::create_load_future keeping a reference to the resource
-// etc. BUT this is much more of a hassel to work with and to integrate with
-// e.g. tokio/futures
 /// # Clone / Send / Sync
 ///
 /// `Context` are meant to be easily shareable, cloning them should be
 /// cheap, as such if a implementor contains state it might make sense for an
 /// implementor to have a outer+inner type where the inner type is wrapped
 /// into a `Arc` e.g. `struct SomeCtx { inner: Arc<InnerSomeCtx> }`.
-pub trait Context: Clone + Send + Sync + 'static {
+pub trait Context: Debug + Clone + Send + Sync + 'static {
 
     /// returns a Future resolving to a FileBuffer.
     ///
@@ -123,7 +119,6 @@ pub trait Context: Clone + Send + Sync + 'static {
     {
         self.offload( future::lazy( func ) )
     }
-
 }
 
 pub type LoadResourceFuture = SendBoxFuture<FileBuffer, ResourceLoadingError>;
@@ -229,4 +224,39 @@ impl<R, O, M> Context for CompositeContext<R, O, M>
         self.id_gen().generate_message_id()
     }
 
+}
+
+
+impl<C> MailIdGenComponent for C
+    where C: Context
+{
+    fn generate_message_id(&self) -> MessageId {
+        <Self as Context>::generate_message_id(self)
+    }
+
+    fn generate_content_id(&self) -> ContentId {
+        <Self as Context>::generate_content_id(self)
+    }
+}
+
+impl<C> OffloaderComponent for C
+    where C: Context
+{
+    fn offload<F>(&self, fut: F) -> SendBoxFuture<F::Item, F::Error>
+        where F: Future + Send + 'static,
+              F::Item: Send+'static,
+              F::Error: Send+'static
+    {
+        <Self as Context>::offload(self, fut)
+    }
+}
+
+impl<C> ResourceLoaderComponent for C
+    where C: Context
+{
+    fn load_resource<O>(&self, source: &Source, _: &O) -> LoadResourceFuture
+        where O: OffloaderComponent
+    {
+        <Self as Context>::load_resource(self, source)
+    }
 }
