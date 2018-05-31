@@ -331,6 +331,10 @@ impl Resource {
         Resource::_new(ResourceState::NotLoaded, Some(source))
     }
 
+    pub fn sourceless(content_type: MediaType, data: impl Into<Vec<u8>>) -> Self {
+        let buffer = FileBuffer::new(content_type, data.into());
+        Resource::sourceless_from_buffer(buffer)
+    }
     /// create a sourceless Resource from a string (content type is `text/plain; charset=utf-8`)
     ///
     /// **Important:** this method does _not_ automatically convert `"\n"` to `"\r\n"` but mail
