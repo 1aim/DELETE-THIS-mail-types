@@ -20,7 +20,7 @@ vec1 = { git="https://github.com/1aim/vec1" }
 mail-common = { git="https://github.com/1aim/mail-common" }
 mail-headers = { git="https://github.com/1aim/mail-headers" }
 chrono = "0.4.0"
-soft-ascii-string = "0.2.0"
+soft-ascii-string = "1.0"
 
 [dependencies.mime]
 git="https://github.com/1aim/mime"

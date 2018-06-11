@@ -69,7 +69,7 @@ fn encode_headers(
 ) -> Result<(), MailError> {
     let mut handle = encoder.writer();
     if top {
-        handle.write_str(SoftAsciiStr::from_str_unchecked(
+        handle.write_str(SoftAsciiStr::from_unchecked(
             "MIME-Version: 1.0"
         ))?;
         handle.finish_header();
@@ -99,7 +99,7 @@ fn encode_header(
     component: &EncodableInHeader
 ) -> Result<(), EncodingError> {
     handle.write_str(name.as_ascii_str())?;
-    handle.write_char(SoftAsciiChar::from_char_unchecked(':'))?;
+    handle.write_char(SoftAsciiChar::from_unchecked(':'))?;
     handle.write_fws();
     component.encode(handle)?;
     handle.finish_header();
@@ -114,7 +114,7 @@ fn encode_header(
 fn encode_mail_part(mail: &Mail, encoder:  &mut EncodingBuffer )
     -> Result<(), MailError>
 {
-    let minus = SoftAsciiChar::from_char_unchecked('-');
+    let minus = SoftAsciiChar::from_unchecked('-');
 
     use super::MailPart::*;
     match mail.body {

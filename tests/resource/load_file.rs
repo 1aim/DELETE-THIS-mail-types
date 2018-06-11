@@ -16,7 +16,7 @@ use mail_types::default_impl::{FsResourceLoader, simple_cpu_pool, HashedIdGen, s
 
 fn dumy_ctx(resource_loader: FsResourceLoader) -> simple_context::Context {
     let domain = Domain::from_unchecked("hy.test".to_owned());
-    let unique_part = SoftAsciiString::from_string_unchecked("w09ad8f");
+    let unique_part = SoftAsciiString::from_unchecked("w09ad8f");
     let id_gen = HashedIdGen::new(domain, unique_part).unwrap();
     CompositeContext::new(resource_loader, simple_cpu_pool(), id_gen)
 }

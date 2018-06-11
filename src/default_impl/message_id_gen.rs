@@ -120,7 +120,7 @@ mod test {
         use super::super::HashedIdGen;
 
         fn setup() -> Arc<HashedIdGen> {
-            let unique_part = SoftAsciiString::from_string_unchecked("bfr7tz4");
+            let unique_part = SoftAsciiString::from_unchecked("bfr7tz4");
             let domain = Domain::try_from("fooblabar.test").unwrap();
             Arc::new(HashedIdGen::new(domain, unique_part).unwrap())
         }

@@ -30,7 +30,7 @@ pub type TestContext = simple_context::Context;
 pub fn test_context() -> TestContext {
     //TODO crate a test context which does not access the file system
     let domain = Domain::from_unchecked("fooblabar.test".to_owned());
-    let unique_part = SoftAsciiString::from_string_unchecked("CM0U3c412");
+    let unique_part = SoftAsciiString::from_unchecked("CM0U3c412");
     simple_context::new(domain, unique_part).unwrap()
 }
 
