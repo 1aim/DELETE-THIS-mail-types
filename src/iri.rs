@@ -1,3 +1,4 @@
+use std::str::FromStr;
 
 //TODO consider adding a str_context
 #[derive(Copy, Clone, Debug, Fail)]
@@ -119,6 +120,14 @@ impl IRI {
     /// bidirectional IRI's).
     pub fn as_str(&self) -> &str {
         &self.iri
+    }
+}
+
+impl FromStr for IRI {
+    type Err = InvalidIRIScheme;
+
+    fn from_str(inp: &str) -> Result<Self, Self::Err> {
+        IRI::new(inp)
     }
 }
 
