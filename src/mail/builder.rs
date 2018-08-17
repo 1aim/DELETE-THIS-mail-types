@@ -91,7 +91,7 @@ impl BuilderShared {
     }
 }
 
-pub fn check_multiple_headers(headers: &HeaderMap , is_multipart: bool)
+pub(crate) fn check_multiple_headers(headers: &HeaderMap , is_multipart: bool)
      -> Result<(), BuilderError>
 {
     if let Some( .. ) = headers.get_single(ContentTransferEncoding) {
@@ -110,7 +110,7 @@ pub fn check_multiple_headers(headers: &HeaderMap , is_multipart: bool)
     Ok( () )
 }
 
-pub fn check_header<H>(
+pub(crate) fn check_header<H>(
     hbody: &H::Component,
     is_multipart: bool
 ) -> Result<(), BuilderError>
