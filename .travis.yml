@@ -3,9 +3,8 @@ rust:
   - stable
   - beta
   - nightly
-script:
-  -- cargo build --verbose --all-features
-  -- cargo test --verbose --all-features
+script: ./test.sh --verbose
+
 matrix:
   allow_failures:
     - rust: nightly
