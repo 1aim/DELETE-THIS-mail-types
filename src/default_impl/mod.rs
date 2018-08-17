@@ -1,4 +1,7 @@
-
+//! This module provides an number of default implementations for some of the interfaces.
+//!
+//! For example it provides a default implementation for the context needed
+//! to build/encode a mail.
 #[cfg(feature="default_impl_cpupool")]
 mod cpupool;
 #[cfg(feature="default_impl_cpupool")]

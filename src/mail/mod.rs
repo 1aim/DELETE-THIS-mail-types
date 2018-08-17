@@ -1,3 +1,7 @@
+//! Module containing all the parts for creating/encoding Mails.
+//!
+//TODO[NOW]: work flow documentation
+
 use std::ops::Deref;
 use std::fmt;
 
@@ -29,27 +33,142 @@ mod resource;
 mod builder;
 mod encode;
 
-
+/// A type representing a Mail.
+///
+/// This type is used to represent a mail including headers and body.
+/// It is also used for the bodies of multipart mime mail bodies as
+/// they can be seen as "sub-mails" or "hirachical nested mails", at
+/// last wrt. everything relevant on this type.
+///
+/// A mail can be created using the `Builder` or more specific either
+/// the `SinglepartBuilder` or the `MultipartBuilder` for a multipart
+/// mime mail.
+///
+/// # Example
+///
+/// This will create, encode and print a simple plain text mail.
+///
+/// ```
+/// # extern crate futures;
+/// # extern crate mail_types;
+/// # extern crate mail_common;
+/// # #[macro_use] extern crate mail_headers as headers;
+/// # use futures::Future;
+/// # use mail_common::MailType;
+/// # use headers::components::Domain;
+/// use std::str;
+/// // either from `mail::headers` or from `mail_header as headers`
+/// use headers::*;
+/// use mail_types::{
+///     Mail, Resource,
+///     default_impl::simple_context
+/// };
+///
+/// # fn main() {
+/// // Domain will implement `from_str` in the future,
+/// // currently it doesn't have a validator/parser.
+/// let domain = Domain::from_unchecked("example.com".to_owned());
+/// // Normally you create this _once per application_.
+/// let ctx = simple_context::new(domain, "xqi93".parse().unwrap())
+///     .unwrap();
+///
+/// let mut mail = Mail::plain_text("Hy there!").unwrap();
+/// mail.set_headers(headers! {
+///     _From: [("I'm Awesome", "bla@examle.com")],
+///     _To: ["unknow@example.com"],
+///     Subject: "Hy there message"
+/// }.unwrap()).unwrap();
+///
+/// // We don't added anythink which needs loading but we could have
+/// // and all of it would have been loaded concurrent and async.
+/// let encoded = mail.into_encodeable_mail(ctx.clone())
+///     .wait().unwrap()
+///     .encode_into_bytes(MailType::Ascii).unwrap();
+///
+/// let mail_str = str::from_utf8(&encoded).unwrap();
+/// println!("{}", mail_str);
+/// # }
+/// ```
+///
+/// And here is an example to create the same mail using the
+/// builder:
+///
+/// ```
+/// # extern crate mail_types;
+/// # #[macro_use] extern crate mail_headers as headers;
+/// // either from `mail::headers` or from `mail_header as headers`
+/// use headers::*;
+/// use mail_types::{Mail, Builder, Resource};
+///
+/// # fn main() {
+/// let resource = Resource::sourceless_from_string("Hy there!");
+/// let mail = Builder::singlepart(resource)
+///     .headers(headers! {
+///         _From: [("I'm Awesome", "bla@examle.com")],
+///         _To: ["unknow@example.com"],
+///         Subject: "Hy there message"
+///     }.unwrap()).unwrap()
+///     .build().unwrap();
+/// # }
+/// ```
+///
+/// And here is an example creating a multipart mail
+/// with a made up `multipart` type.
+///
+/// ```
+/// # extern crate mail_types;
+/// # #[macro_use] extern crate mail_headers as headers;
+/// // either from `mail::headers` or from `mail_header as headers`
+/// use headers::*;
+/// use mail_types::{Mail, Builder, Resource, mime::gen_multipart_media_type};
+///
+/// # fn main() {
+/// let sub_body1 = Mail::plain_text("Body 1").unwrap();
+/// let sub_body2 = Mail::plain_text("Body 2, yay").unwrap();
+///
+/// // This will generate `multipart/x.made-up-think; boundary=randome_generate_boundary`
+/// let media_type = gen_multipart_media_type("x.made-up-thing").unwrap();
+/// let mail = Builder::multipart(media_type).unwrap()
+///     .body(sub_body1).unwrap()
+///     .body(sub_body2).unwrap()
+///     .headers(headers! {
+///         _From: [("I'm Awesome", "bla@examle.com")],
+///         _To: ["unknow@example.com"],
+///         Subject: "Hy there message"
+///     }.unwrap()).unwrap()
+///     .build().unwrap();
+/// # }
+/// ```
 #[derive(Clone, Debug)]
 pub struct Mail {
-    //NOTE: by using some OwnedOrStaticRef AsciiStr we can probably safe a lot of
-    // unnecessary allocations
     headers: HeaderMap,
     body: MailPart,
 }
 
+/// A type which either represents a single body, or multiple modies.
+///
+/// Note that you could have a mime multipart body just containing a
+/// single body _and_ it being semantically important to be this way,
+/// so we have to differ between both kinds (instead of just having
+/// a `Vec` of mails)
 #[derive(Clone, Debug)]
 pub enum MailPart {
     SingleBody {
         body: Resource
     },
     MultipleBodies {
+        //TODO[now]: use Vec1
         bodies: Vec<Mail>,
+        /// This is part of the standard! But we won't
+        /// make it public available for now. Through
+        /// there is a chance that we need to do so
+        /// in the future as some mechanisms might
+        /// misuse this, well unusual think.
         hidden_text: SoftAsciiString
     }
 }
 
-/// a future resolving to an encodeable mail
+/// A future resolving to an encodeable mail.
 ///
 /// The future resolves like this:
 ///
@@ -83,17 +202,31 @@ pub struct EncodableMail(Mail, Vec<ResourceAccessGuard>);
 
 impl Mail {
 
+    pub fn plain_text(text: impl Into<String>) -> Result<Self, BuilderError> {
+        let resource = Resource::sourceless_from_string(text);
+        Builder::singlepart(resource).build()
+    }
 
-    /// adds a new header,
+    /// Add a new header, converting the header component `comp` to the right type.
     ///
-    /// - if the header already existed, the existing one will be overriden and the
-    ///   old header will be returned
-    /// - `Content-Transfer-Encoding` it might be overwritten later one
+    /// Note that some headers namely `Content-Transfer-Encoding` and
+    /// for singlepart mails `Content-Type` are derived from the content
+    /// and _cannot_ be set. Also `Date` is auto-generated if not set.
     ///
-    /// # Failure
+    /// Be aware that while the most know headers (like `From`) should only
+    /// appear one time others can appear multiple times. This function just
+    /// adds another header. It doesn't check if a header with the same name
+    /// was already set _and_ if the header should only appear one time.
     ///
-    /// if a Content-Type header is set, which conflicts with the body, mainly if
-    /// you set a multipart content type on a non-multipart body or the other way around
+    /// # Error
+    ///
+    /// An error is returned if:
+    ///
+    /// - A `Content-Type` header is set in for a single part mail, or
+    ///   a `Content-Type` header which is not `multipart` is set for an
+    ///   multipart mail.
+    ///
+    /// - A `Content-Transfer-Encoding` header is set
     ///
     pub fn set_header<H, C>(&mut self, header: H, comp: C)
         -> Result<(), BuilderError>
@@ -107,6 +240,7 @@ impl Mail {
         Ok(())
     }
 
+    /// Sets all header from the provided header map.
     pub fn set_headers(&mut self, headers: HeaderMap)
         -> Result<(), BuilderError>
     {
@@ -115,17 +249,27 @@ impl Mail {
         Ok(())
     }
 
-    pub fn headers( &self ) -> &HeaderMap {
+    /// Returns a reference to the currently set headers.
+    ///
+    /// Note that some headers namely `Content-Transfer-Encoding` and
+    /// for singlepart mails `Content-Type` are derived from the content
+    /// and _cannot_ be set. Also `Date` is auto-generated if not set.
+    pub fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
-    pub fn body( &self ) -> &MailPart {
+    /// Returns a reference to the body/bodies.
+    pub fn body(&self) -> &MailPart {
         &self.body
     }
 
     //TODO potentially change it into as_encodable_mail(&mut self)
     /// Turns the mail into a future with resolves to an `EncodeableMail`
     ///
+    /// Use this if you want to encode a mail. This is needed as `Resource`
+    /// instances used in the mail are loaded "on-demand", i.e. if you attach
+    /// two images but never turn the mail into an encodable mail the images
+    /// are never loaded from disk.
     pub fn into_encodeable_mail<C: Context>(self, ctx: C) -> MailFuture<C> {
         let mut futures = Vec::new();
         //FIXME[rust/! type]: use ! instead of (),
@@ -159,7 +303,8 @@ impl Mail {
 
 impl MailPart {
 
-    pub fn is_multipart( &self ) -> bool {
+    /// Returns `true` if it's an multipart body.
+    pub fn is_multipart(&self) -> bool {
         use self::MailPart::*;
         match *self {
             SingleBody { .. } => false,
@@ -185,10 +330,22 @@ impl<T> Future for MailFuture<T>
 
 impl EncodableMail {
 
+    /// Encode the mail using the given encoding buffer.
+    ///
+    /// After encoding succeeded the buffer should contain
+    /// a fully encoded mail including all attachments, embedded
+    /// images alternate bodies etc.
+    ///
+    /// # Error
+    ///
+    /// This can fail for a large number of reasons, e.g. some
+    /// input can not be encoded with the given mail type or
+    /// some headers/resources breack the mails hard line length limit.
     pub fn encode(&self, encoder: &mut EncodingBuffer) -> Result<(), MailError> {
         encode::encode_mail(self, true, encoder)
     }
 
+    /// A wrapper for `encode` which will create a buffer, enocde the mail and then returns the buffers content.
     pub fn encode_into_bytes(&self, mail_type: MailType) -> Result<Vec<u8>, MailError> {
         let mut buffer = EncodingBuffer::new(mail_type);
         self.encode(&mut buffer)?;

@@ -6,6 +6,11 @@ use futures_cpupool::{ CpuPool, Builder};
 
 use context::OffloaderComponent;
 
+/// Create a `futures_cpupool::CpuPool` with default parameters.
+///
+/// Note that this crate implements `OffloaderComponent` for `CpuPool`.
+/// (Which is a component of the context used to build/encode mails and
+/// should not be confused with header components).
 pub fn simple_cpu_pool() -> CpuPool {
     Builder::new().create()
 }

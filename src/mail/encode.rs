@@ -25,7 +25,7 @@ use super::{
 /// on `Mail` to prevent this from happening
 ///
 #[inline(always)]
-pub fn encode_mail(
+pub(crate) fn encode_mail(
     mail: &EncodableMail,
     top: bool,
     encoder: &mut EncodingBuffer

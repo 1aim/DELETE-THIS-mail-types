@@ -1,3 +1,4 @@
+//! Provides the context needed for building/encoding mails.
 use std::sync::Arc;
 use std::fmt::Debug;
 
@@ -33,7 +34,33 @@ pub struct Source {
     pub use_name: Option<String>
 }
 
-/// # Clone / Send / Sync
+/// This library needs a context for creating/encoding mails.
+///
+/// The context is _not_ meant to be a think you create once
+/// per mail but something you create once one startup and then
+/// re-user wherever it is needed in your application.
+///
+/// A context impl. provides following functionality to this library:
+///
+/// 1. Load a `Resource` based on a `Source` instance.
+///    I.e. an IRI plus some optional meta information.
+/// 2. Generate an unique message id. This should be
+///    an world unique id to comply with the standard(s).
+/// 3. Generate an unique content id. This should be
+///    an world unique id to comply with the standard(s).
+/// 4. A way to "offload" work to some other "place" e.g.
+///    by scheduling it in an thread pool.
+///
+/// The `CompositeContext` provides a impl. for this trait
+/// which delegates the different tasks to the components
+/// it's composed of. This allow to reuse e.g. the message
+/// if generation and offloading but use a custom resource
+/// loading. Generally it's recommended to use the `CompositeContext`.
+///
+/// There is also an default implementation (using the
+/// `CompositeContext` in the `default_impl` module).
+///
+/// # Clone / Send / Sync / 'static ?
 ///
 /// `Context` are meant to be easily shareable, cloning them should be
 /// cheap, as such if a implementor contains state it might make sense for an
@@ -71,7 +98,7 @@ pub trait Context: Debug + Clone + Send + Sync + 'static {
     /// As such if the loading process blocks or consumes to many cpu resources it's
     /// recommended to offload the work to e.g. a CpuPool, if the implementor of this
     /// trait also implements RunElsewhere it simple doable by using `RunElsewhere::execute`.
-    fn load_resource(&self, &Source) -> LoadResourceFuture;
+    fn load_resource(&self, source: &Source) -> LoadResourceFuture;
 
     /// generate a unique content id
     ///
@@ -121,38 +148,59 @@ pub trait Context: Debug + Clone + Send + Sync + 'static {
     }
 }
 
+/// Future returned from `Context::load_resource`.
 pub type LoadResourceFuture = SendBoxFuture<FileBuffer, ResourceLoadingError>;
 
-
+/// Trait needed to be implemented for providing the resource loading parts to a`CompositeContext`.
 pub trait ResourceLoaderComponent: Debug + Send + Sync + 'static {
 
+    /// Calls to `Context::load_resource` will be forwarded to this method.
+    ///
+    /// It is the same as `Context::load_resource` except that a reference
+    /// to an `OffloaderComponent` will be passed in as it's likely needed.
     fn load_resource<O>( &self, source: &Source, offload: &O) -> LoadResourceFuture
         where O: OffloaderComponent;
 }
 
+/// Trait needed to be implemented for providing the offloading parts to a `CompositeContext`.
 pub trait OffloaderComponent: Debug + Send + Sync + 'static {
+
+    /// Calls to `Context::offload` and `Context::offload_fn` will be forwarded to this method.
     fn offload<F>(&self, fut: F) -> SendBoxFuture<F::Item, F::Error>
         where F: Future + Send + 'static,
               F::Item: Send+'static,
               F::Error: Send+'static;
 }
 
+/// Trait needed to be implemented for providing the id generation parts to a `CompositeContext`.
+///
+/// It is possible/valid to use the same implementation (internal function etc.) for
+/// both message and content ids. While they are used at different places they have
+/// mostly the same constraints (their meaning is still different i.e. it's much
+/// more important for an message id to be "world unique" then for an content id,
+/// expect in some cases where external bodies are used).
 pub trait MailIdGenComponent: Debug + Send + Sync + 'static {
 
-    //TODO doc: link method
-    /// returns the same unique message id
-    ///
-    /// see `Context::generate_message_id` for more details
+    /// Calls to `Context::generate_message_id` will be forwarded to this method.
     fn generate_message_id(&self) -> MessageId;
 
-    //TODO doc: link method
-    /// generates a new content id
-    ///
-    /// see `Context::generate_content_id` for more details
+    /// Calls to `Context::generate_content_id` will be forwarded to this method.
     fn generate_content_id(&self) -> ContentId;
 }
 
-
+/// The `CompositeContext` is the simplest way to get an `Context` implementation.
+///
+/// Any custom `Context` implementations should be realized through the `CompositeContext`
+/// if possible.
+///
+/// This type consists of 3 components it forward all method calls from `Context` to.
+/// This allows the library to have a single `Context` type but match and mix the
+/// parts about resource loading, offloading and id generation in whichever way
+/// it fits best.
+///
+/// The composite context will store the components inside of an `Arc` so that
+/// it can be easily shared through an application, it also means non of the
+/// components have to implement `Clone`.
 #[derive(Debug)]
 pub struct CompositeContext<
     R: ResourceLoaderComponent,
@@ -179,20 +227,24 @@ impl<R, O, M> CompositeContext<R, O, M>
           O: OffloaderComponent,
           M: MailIdGenComponent
 {
+    /// Create a new context from the given components.
     pub fn new(resource_loader: R, offloader: O, message_id_gen: M) -> Self {
         CompositeContext {
             inner: Arc::new((resource_loader, offloader, message_id_gen)),
         }
     }
 
+    /// Returns a reference to the resource loader component.
     pub fn resource_loader(&self) -> &R {
         &self.inner.0
     }
 
+    /// Returns a reference to the offloader component.
     pub fn offloader(&self) -> &O {
         &self.inner.1
     }
 
+    /// Returns a reference to the id generation component.
     pub fn id_gen(&self) -> &M {
         &self.inner.2
     }
@@ -226,7 +278,7 @@ impl<R, O, M> Context for CompositeContext<R, O, M>
 
 }
 
-
+/// Allows using a part of an context as an component.
 impl<C> MailIdGenComponent for C
     where C: Context
 {
@@ -239,6 +291,7 @@ impl<C> MailIdGenComponent for C
     }
 }
 
+/// Allows using a part of an context as an component.
 impl<C> OffloaderComponent for C
     where C: Context
 {
@@ -251,6 +304,7 @@ impl<C> OffloaderComponent for C
     }
 }
 
+/// Allows using a part of an context as an component.
 impl<C> ResourceLoaderComponent for C
     where C: Context
 {

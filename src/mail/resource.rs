@@ -82,14 +82,51 @@ use super::context::{Context, Source};
 /// be canceled so that they can pick up the polling). This is necessary due
 /// to the way the future libary parks and notifies tasks.
 ///
-/// # Example
+/// # Example (Sourceless)
 ///
+/// Create a resource from a string:
+///
+/// ```
+/// # use mail_types::Resource;
+/// // resoure with media type = "text/plain; charset=utf-8"
+/// let resource = Resource::sourceless_from_string("This is a text body");
+/// ```
+///
+/// Create a resource from a byte buffer:
+///
+/// ```
+/// # use std::str::FromStr;
+/// # use mail_types::Resource;
+/// let data = vec![ 0x82, 0xA5, b'h', b'a', b'l', b'l', b'o', 0xA5, b'w', b'o', b'r', b'l', b'd' ];
+/// let media_type = "application/x.msgpack".parse().unwrap();
+/// let resource = Resource::sourceless(media_type, data);
+/// ```
+///
+/// # Example (with Source)
+///
+/// Load a image, **note that the interpretation of the IRI
+/// depends on the implementation of `Context`/`ResourceLoaderComponent`.
+///
+/// ```
+/// # use mail_types::{Resource, Source};
+/// let source = Source {
+///     // assuming the resource loader can handle a file scheme
+///     // (through it might isolate it to a pseudo root dir or similar,
+///     // it the resource loader impl. decision how to handle thinks)
+///     iri: "path:images/dog.png".parse().unwrap(),
+///     use_media_type: Some("image/png".parse().unwrap()),
+///     use_name: Some("awesome_dog.png".to_owned())
+/// };
+///
+/// // Note that it's not loaded yet. It will
+/// // be loaded on demand when using it in a
+/// // mail.
+/// let resource = Resource::new(source);
+/// ```
 //TODO
 // ```
-// //1. context
-// //2. mk resource clone it
 // //3. load it
-// //4. use both instances
+// //4. access it's content
 // ```
 ///
 #[derive( Debug, Clone )]
@@ -999,7 +1036,7 @@ impl<C> Future for ResourceLoadingFuture<C>
 }
 
 
-
+//TODO[NOW]: merge with `Guard`
 /// Keep alive to prevent a resource from being unloaded.
 ///
 /// This also provides easy access to the `TransferEncodedFileBuffer` contained

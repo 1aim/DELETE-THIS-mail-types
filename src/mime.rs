@@ -1,3 +1,4 @@
+//! Module containing some utilities for MIME usage/creation.
 use rand;
 use rand::Rng;
 
@@ -5,7 +6,7 @@ use headers::components::MediaType;
 use headers::error::ComponentCreationError;
 
 
-/// write a random sequence of chars valide for and boundary to the output buffer
+/// write a random sequence of chars valid for and boundary to the output buffer
 ///
 /// Note that it might be required to quote the boundary.
 ///
@@ -18,7 +19,7 @@ use headers::error::ComponentCreationError;
 /// == 78 chars)
 ///
 /// The remaining characters will be picked based one the grammar defined in rfc2046,
-/// whichs relevant part is:
+/// which relevant part is:
 ///
 /// ```BNF
 /// boundary := 0*69<bchars> bcharsnospace
@@ -29,7 +30,6 @@ use headers::error::ComponentCreationError;
 /// ```
 ///
 pub fn create_random_boundary() -> String {
-
 
     //the maximal boundary with wich " boundary=\"...\"" fits into 78 chars line length limit
     const MULTIPART_BOUNDARY_LENGTH: usize = 66;
@@ -65,7 +65,12 @@ pub fn create_random_boundary() -> String {
     out
 }
 
-
+/// Generate a media type in instance for a multipart media type based on an string naming the subtype.
+///
+/// This will generate a media type with:
+/// - type `multipart`
+/// - subtype as given (through it's parsed to make sure it's valid)
+/// - one parameter `boundary` with a random boundary
 pub fn gen_multipart_media_type<A>(subtype: A ) -> Result<MediaType, ComponentCreationError>
     where A: AsRef<str>
 {

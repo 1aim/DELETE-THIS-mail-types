@@ -19,18 +19,27 @@ use ::mime::create_random_boundary;
 use super::resource::Resource;
 use super::{ MailPart, Mail };
 
-
+/// Basic builder type, this is just an entry point to get one of the "real" builders.
+///
+/// - use `Builder::multipart` to get a builder for a multi part mime body
+/// - use `Builder::singlepart` to get a builder for a single part mime body/non mime mail body
 pub struct Builder;
 
 struct BuilderShared {
     headers: HeaderMap
 }
 
+/// Builder used to build a mail body based on a Resource.
+///
+/// This is used for everything which is not a multi part
+/// mime body and is used to build the "leaf" bodies of
+/// a multi part mime body.
 pub struct SinglepartBuilder {
     inner: BuilderShared,
     body: Resource
 }
 
+/// Builder used to build a multi part mime mail body.
 pub struct MultipartBuilder {
     inner: BuilderShared,
     hidden_text: Option<SoftAsciiString>,
@@ -140,7 +149,7 @@ pub(crate) fn check_header<H>(
 
 impl Builder {
 
-    /// create a MultipartBuilder with the given media-type as content-type
+    /// Create a MultipartBuilder with the given media-type as content-type.
     ///
     /// This function will always set the boundary parameter to a random
     /// generated boundary string. If the media type already had it
@@ -170,6 +179,10 @@ impl Builder {
         Ok(res.header(ContentType, media_type).unwrap())
     }
 
+    /// Create a builder for a non multipart mail body based on a resource.
+    ///
+    /// This can be for example an image or a text or html. Its also
+    /// used inside a multipart mime body for the "leaf" bodies.
     pub fn singlepart(r: Resource) -> SinglepartBuilder {
         SinglepartBuilder {
             inner: BuilderShared::new(),
@@ -181,6 +194,21 @@ impl Builder {
 
 impl SinglepartBuilder {
 
+    /// Add a header to the body.
+    ///
+    /// Be aware that this body isn't necessary used as a top level
+    /// body, so adding headers which are meant for the mail (and not this
+    /// specific body) is discouraged.
+    ///
+    /// # Error
+    ///
+    /// If the headers content/component `hbody` can not be converted
+    /// in the type required by the header `header` an error is returned.
+    /// This can for example happen when adding a header requiring a mailbox
+    /// or email and passing in a (malformed) email as string.
+    ///
+    /// If the header is `Content-Type` or `Content-Transfer-Encoding` an
+    /// error is returned as they are generated based on the resource.
     pub fn header<H, C>(
         mut self,
         header: H,
@@ -195,11 +223,28 @@ impl SinglepartBuilder {
         Ok(self)
     }
 
+    /// Add all headers from the given header map into this builder.
+    ///
+    /// Be aware that validation tasks like "check if there is only
+    /// on `Content-Id` header" are _not_ automatically run every
+    /// time an header is added (as this would be a problem with
+    /// some edge cases).
+    ///
+    /// # Error
+    ///
+    /// If the header is `Content-Type` or `Content-Transfer-Encoding` an
+    /// error is returned as they are generated based on the resource.
     pub fn headers(mut self, headers: HeaderMap) -> Result<Self, BuilderError> {
         self.inner.headers(headers, false)?;
         Ok(self)
     }
 
+    /// Convert the header into a `Mail` type.
+    ///
+    /// The returned mail is as such not a multipart mime mail
+    /// but e.g. a plain text mail.
+    ///
+    //TODO[NOW] remove result it never errors
     pub fn build(self) -> Result<Mail, BuilderError> {
         self.inner.build( MailPart::SingleBody { body: self.body } )
     }
@@ -207,12 +252,20 @@ impl SinglepartBuilder {
 
 impl MultipartBuilder {
 
-
+    /// Add a header to the body.
+    ///
+    /// Be aware that this body isn't necessary used as a top level
+    /// body.
     ///
     /// # Error
     ///
-    /// A error is returned if the header is incompatible with this builder,
-    /// i.e. if a ContentType header is set with a non-multipart content type
+    /// An error is returned if:
+    ///
+    /// - A `Content-Type` header is added with a media type which
+    ///   is not `multipart`.
+    ///
+    /// - A `Content-Transfer-Encoding` header is added.
+    ///
     pub fn header<H, C>(
         mut self,
         header: H,
@@ -227,16 +280,32 @@ impl MultipartBuilder {
         Ok(self)
     }
 
+    /// Add all headers from the given header map into this builder.
     pub fn headers(mut self, headers: HeaderMap) -> Result<Self, BuilderError> {
         self.inner.headers(headers, true)?;
         Ok(self)
     }
 
+    /// Add a new (sub) body.
+    ///
+    /// The new body is a mail instance, which could have been created
+    /// by the `SinglepartBuilder` or this builder. So it can be
+    /// "just some content" (e.g. a plain/text body) or another
+    /// multipart body.
+    //TODO[NOW]: remove result
     pub fn body(mut self, body: Mail) -> Result<Self, BuilderError> {
         self.bodies.push(body);
         Ok(self)
     }
 
+    /// Builds a mail with a multipart mime.
+    ///
+    /// # Error
+    ///
+    /// This fails if:
+    ///
+    /// - Not at last one body was added.
+    ///
     pub fn build(self) -> Result<Mail, BuilderError> {
         if self.bodies.len() == 0 {
             Err(BuilderError::from(OtherBuilderErrorKind::EmptyMultipartBody))

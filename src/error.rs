@@ -1,3 +1,4 @@
+//! Module containing all custom errors produced by this crate.
 use std::fmt::{self, Display};
 use std::io;
 
@@ -16,11 +17,19 @@ use ::IRI;
 //                \  EncodingFailed | EncodingError (Backtrace!)   > MailError::Encoding
 //
 
+/// Error caused by failing to load an `Resource`
+///
 #[derive(Debug, Fail)]
 pub enum ResourceError {
+    /// The loading on itself failed.
     #[fail(display = "{}", _0)]
     Loading(ResourceLoadingError),
 
+    /// The encoding of the resource failed.
+    ///
+    /// Note: Resources are encoded as this allows shared
+    /// resources to not be re-encoded every time they are
+    /// used.
     #[fail(display = "{}", _0)]
     Encoding(EncodingError)
 }
@@ -37,24 +46,23 @@ impl From<ResourceLoadingError> for ResourceError {
     }
 }
 
-
+/// Reasons why the loading of an `Resource` can fail.
 #[derive(Copy, Clone, Debug, Fail, PartialEq, Eq, Hash)]
 pub enum ResourceLoadingErrorKind {
+    /// The resource wasn't found.
     #[fail(display = "resource not found")]
     NotFound,
 
+    /// Loading the resource already failed before.
     #[fail(display = "loading shared resource already failed before")]
     SharedResourcePoisoned,
 
+    /// The act of loading it failed (e.g. because of an I/0-Error)
     #[fail(display = "loading failed")]
     LoadingFailed
 }
 
-//TODO I just noticed that all error variants would nice to
-// 1. have the IRI
-// 2. have a Backtrace or Error
-//
-// => so make it ResourceLoadingKind + ResourceLoadingError { Context<Kind>, IRI }
+/// The loading of an Resource failed.
 #[derive(Debug)]
 pub struct ResourceLoadingError {
     inner: Context<ResourceLoadingErrorKind>,
@@ -79,14 +87,17 @@ impl Fail for ResourceLoadingError {
 
 impl ResourceLoadingError {
 
+    /// The kind of error which caused the loading to fail.
     pub fn kind(&self) -> ResourceLoadingErrorKind {
         *self.inner.get_context()
     }
 
+    /// The source IRI which was used when failing to load the Resource.
     pub fn source_iri(&self) -> Option<&IRI> {
         self.iri.as_ref()
     }
 
+    /// Sets the source IRI if not already set and returns self.
     pub fn with_source_iri_or_else<F>(mut self, func: F) -> Self
         where F: FnOnce() -> Option<IRI>
     {
@@ -143,33 +154,58 @@ impl From<io::Error> for ResourceLoadingError {
 
 
 
-
+/// Some additional reasons why building a mail might fail.
 #[derive(Copy, Clone, Debug, Fail, PartialEq, Eq, Hash)]
 pub enum OtherBuilderErrorKind {
+    //TODO[NOW] isn't this an duplicate with `InsertSinglePartContentType`
+    /// Builder tried to insert `Content-Type` header.
+    ///
+    /// But that header is _always_ auto-generated based
+    /// on the body.
     #[fail(display = "inserting Content-Type manually is not allowed")]
     InsertingContentTypeHeader,
 
+    /// Builder tried to insert `Content-Transfer-Encoding` header.
+    ///
+    /// But that header is _always_ auto-generated based
+    /// on the body.
     #[fail(display = "inserting Content-Transfer-Encoding manually is not allowed")]
     InsertingContentTransferEncodingHeader,
 
+    //TODO[NOW] shouldn't this be MultipartContentTypeInSinglepartBody
+    ///
     #[fail(display = "inserting a header changing if a body is single/multipart is not allowed")]
     SingleMultipartMixup,
 
+    /// Inserting a `Conent-Type` header into a singlepart body is not allowed.
+    ///
+    /// In single-part bodies the `Content-Type` header is always auto-generated
+    /// based on the actual body.
     #[fail(display = "inserting Content-Type for singlepart body is not allowed")]
     InsertSinglepartContentTypeHeader,
 
+    /// This library only allows multipart bodies which contain at last one body.
     #[fail(display = "multipart bodies need at last one part")]
     EmptyMultipartBody
 }
 
+/// Building the mail failed.
 #[derive(Debug, Fail)]
 pub enum BuilderError {
+    /// A Type error can appear if multiple implementations for the same header
+    /// are mixed.
     #[fail(display = "{}", _0)]
     Type(HeaderTypeError),
 
+    /// Failed to create the required components.
+    ///
+    /// This can for example appear if you try to insert
+    /// a string as an `Email`/`Mailbox` component which
+    /// isn't a valid email address.
     #[fail(display = "{}", _0)]
     Component(ComponentCreationError),
 
+    /// A different kind of error occurred (see `OtherBuilderErrorKind`).
     #[fail(display = "{}", _0)]
     Other(Context<OtherBuilderErrorKind>)
 }
@@ -199,17 +235,29 @@ impl From<ComponentCreationError> for BuilderError {
 }
 
 
+/// General Error combining most other error wrt. mail creation and encoding.
 #[derive(Debug, Fail)]
 pub enum MailError {
+    /// Encoding the mail failed.
     #[fail(display = "{}", _0)]
     Encoding(EncodingError),
 
+    /// Creating the mail failed.
     #[fail(display = "{}", _0)]
     Creation(BuilderError),
 
+    /// The mail has some invalid header or header combinations.
+    ///
+    /// E.g. it has a `From` header with multiple mailboxes but no
+    /// `Sender` header (which is only required if `From` has more
+    /// than one mailbox).
     #[fail(display = "{}", _0)]
     Validation(HeaderValidationError),
 
+    /// Loading an resource failed.
+    ///
+    /// E.g. the file to attach or the image to embedded could not
+    /// be found.
     #[fail(display = "{}", _0)]
     ResourceLoading(ResourceLoadingError)
 }
@@ -266,11 +314,17 @@ impl From<ComponentCreationError> for MailError {
 }
 
 
-//
+/// Error returned when trying to _unload_ and `Resource` and it fails.
 #[derive(Copy, Clone, Debug, Fail)]
 pub enum ResourceNotUnloadableError {
+    /// The resource can not be unloaded because its in use.
     #[fail(display = "resource is in use, can't unload it")]
     InUse,
+    /// The resource can not be unloaded because it doesn't has a source.
+    ///
+    /// Which means if we would unload it we could not reload it. Note
+    /// that unloading is just for thinks like caching, it doesn't affect
+    /// the deletion/dropping of `Resource` instances.
     #[fail(display = "resource has no source, can't unload it")]
     NoSource
 }
