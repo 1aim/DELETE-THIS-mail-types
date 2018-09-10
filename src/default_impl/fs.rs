@@ -8,7 +8,7 @@ use failure::Fail;
 use futures::{ future, IntoFuture};
 
 use common::utils::FileMeta;
-use headers::components::MediaType;
+use headers::header_components::MediaType;
 
 use ::IRI;
 use ::utils::{ConstSwitch, Enabled, Disabled};

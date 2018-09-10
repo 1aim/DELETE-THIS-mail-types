@@ -12,8 +12,10 @@ use futures::Future;
 use mail_common::MailType;
 
 // In the facade this is the `headers` module.
-use mail_headers::*;
-use mail_headers::components::Domain;
+use mail_headers::{
+    headers::*,
+    header_components::Domain
+};
 
 // In the facade this types (and the default_impl module)
 // are also exposed at top level
@@ -32,12 +34,12 @@ fn print_some_mail() -> Result<(), MailError> {
     let ctx = simple_context::new(domain, "xqi93".parse().expect("we know it's ascii"))
         .expect("this is basically: failed to get cwd from env");
 
-    let mut mail = Mail::plain_text("Hy there! 😁")?;
-    mail.set_headers(headers! {
+    let mut mail = Mail::plain_text("Hy there! 😁");
+    mail.insert_headers(headers! {
         _From: [("I'm Awesome 😁", "bla@examle.com")],
         _To: ["unknow@example.com"],
         Subject: "Hy there message 😁"
-    }?)?;
+    }?);
 
     // We don't added any think which needs loading but we could have
     // and all of it would have been loaded concurrent and async.

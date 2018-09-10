@@ -1,4 +1,3 @@
-use failure::Fail;
 use soft_ascii_string::{
     SoftAsciiStr,
     SoftAsciiChar,
@@ -6,12 +5,18 @@ use soft_ascii_string::{
 };
 use media_type::BOUNDARY;
 
-use common::error::{EncodingError, EncodingErrorKind, Place, UTF_8, US_ASCII};
-use common::encoder::{
-    EncodingBuffer, EncodableInHeader, EncodingWriter,
+use common::{
+    encoder::{
+        EncodingBuffer, EncodingWriter,
+    },
+    error::{EncodingError, EncodingErrorKind, Place, UTF_8, US_ASCII}
 };
-use headers::{HeaderName, ContentType};
-use headers::error::{HeaderValidationError, BuildInValidationError};
+use headers::{
+    HeaderName,
+    HeaderObj,
+    headers::ContentType
+};
+
 use ::error::MailError;
 
 use super::{
@@ -96,12 +101,12 @@ fn encode_headers(
 fn encode_header(
     handle: &mut EncodingWriter,
     name: HeaderName,
-    component: &EncodableInHeader
+    header: &HeaderObj
 ) -> Result<(), EncodingError> {
     handle.write_str(name.as_ascii_str())?;
     handle.write_char(SoftAsciiChar::from_unchecked(':'))?;
     handle.write_fws();
-    component.encode(handle)?;
+    header.encode(handle)?;
     handle.finish_header();
     Ok(())
 }
@@ -116,7 +121,7 @@ fn encode_mail_part(mail: &Mail, encoder:  &mut EncodingBuffer )
 {
     let minus = SoftAsciiChar::from_unchecked('-');
 
-    use super::MailPart::*;
+    use super::MailBody::*;
     match mail.body {
         SingleBody { ref body } => {
             encoder.write_body_unchecked(body)?;
@@ -128,24 +133,15 @@ fn encode_mail_part(mail: &Mail, encoder:  &mut EncodingBuffer )
                 // if not drop the "hidden_text" field
                 warn!("\"hidden text\" in multipart bodies is dropped")
             }
-            let boundary;
-            if let Some(media_type) = mail.headers.get_single(ContentType) {
-                let media_type = media_type.map_err(|err|
-                    HeaderValidationError
-                    ::from(err.context(BuildInValidationError::NoContentType))
-                )?;
 
-                boundary = media_type.get_param(BOUNDARY)
-                    //TODO typed error
-                    .ok_or_else(|| HeaderValidationError
-                        ::from(BuildInValidationError::NoMultipartBoundary)
-                    )?
-                    .to_content()
-            } else {
-                return Err(HeaderValidationError::from(
-                    BuildInValidationError::NoContentType).into());
-            }
-
+            let mail_was_validated_err_msg = "[BUG] mail was already validated";
+            let boundary = mail.headers()
+                .get_single(ContentType)
+                .expect(mail_was_validated_err_msg)
+                .expect(mail_was_validated_err_msg)
+                .get_param(BOUNDARY)
+                .expect(mail_was_validated_err_msg)
+                .to_content();
 
             let boundary = SoftAsciiString
                 ::from_string(boundary)
@@ -175,15 +171,7 @@ fn encode_mail_part(mail: &Mail, encoder:  &mut EncodingBuffer )
                     handle.write_char(minus)?;
                     handle.write_char(minus)
                 })?;
-            } else {
-                // this is theoretically not necessary an error, but it
-                // really should not be created, the only use I could come
-                // up with is to e.g. hide additional data "between the lines"
-                // in a mail used to control some malware
-                return Err(HeaderValidationError::from(
-                    BuildInValidationError::EmptyMultipartBody).into());
             }
-
         }
     }
     Ok(())

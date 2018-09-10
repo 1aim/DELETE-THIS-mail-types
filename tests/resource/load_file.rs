@@ -4,7 +4,7 @@ use std::env;
 use futures::Future;
 use soft_ascii_string::SoftAsciiString;
 use mail_types::file_buffer::FileBuffer;
-use headers::components::{MediaType, Domain};
+use headers::header_components::{MediaType, Domain};
 use mail_types::{
     Resource,
     IRI,

@@ -9,7 +9,7 @@ macro_rules! assert_not {
 macro_rules! assert_ok {
     ($val:expr) => ({
         match $val {
-            Ok( res ) => res,
+            Ok(res) => res,
             Err(err) => panic!( "expected Ok(..) got Err({:?})", err)
         }
     });
@@ -37,3 +37,16 @@ macro_rules! assert_err {
     });
 }
 
+#[cfg(test)]
+macro_rules! test {
+    ($name:ident, $code:block) => (
+        #[test]
+        fn $name() {
+            let catch_block = || -> Result<(), ::error::MailError> {
+                $code;
+                Ok(())
+            };
+            (catch_block)().unwrap();
+        }
+    );
+}

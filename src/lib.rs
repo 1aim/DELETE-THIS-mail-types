@@ -12,7 +12,6 @@ extern crate log;
 extern crate failure;
 extern crate mime as media_type;
 extern crate chrono;
-#[macro_use]
 extern crate futures;
 #[cfg(feature="default_impl_cpupool")]
 extern crate futures_cpupool;

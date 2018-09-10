@@ -23,7 +23,7 @@ compile_error!("test need following (default) features: default_impl_cpupool, de
 #[cfg(test)]
 use soft_ascii_string::SoftAsciiString;
 #[cfg(test)]
-use headers::components::Domain;
+use headers::header_components::Domain;
 
 #[cfg(test)]
 pub type TestContext = simple_context::Context;

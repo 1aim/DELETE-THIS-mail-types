@@ -10,7 +10,7 @@
 //! ```
 //! # extern crate mail_types as mail;
 //! # extern crate mail_headers as headers;
-//! # use headers::components::Domain;
+//! # use headers::header_components::Domain;
 //! # // It's re-exported in the facade under `default_impl`.
 //! # use std::str::FromStr;
 //! use mail::default_impl::simple_context;
@@ -32,7 +32,7 @@ use soft_ascii_string::SoftAsciiString;
 use futures_cpupool::{Builder, CpuPool};
 
 use common::error::EncodingError;
-use headers::components::Domain;
+use headers::header_components::Domain;
 
 use ::context::CompositeContext;
 use ::default_impl::{FsResourceLoader, HashedIdGen};

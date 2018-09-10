@@ -10,9 +10,11 @@ use std::mem;
 use futures::{  Future, Poll, Async };
 use futures::task;
 
-use common::error::{EncodingError, EncodingErrorKind};
-use common::encoder::BodyBuffer;
-use headers::components::MediaType;
+use common::{
+    encoder::BodyBuffer,
+    error::{EncodingError, EncodingErrorKind}
+};
+use headers::header_components::MediaType;
 
 use ::error::{
     ResourceError, ResourceLoadingError,
@@ -1109,7 +1111,7 @@ mod test {
     use futures::future::Either;
 
     use ::IRI;
-    use headers::components::MediaType;
+    use headers::header_components::MediaType;
 
     use super::*;
 

@@ -1,36 +1,51 @@
 //! Module containing all the parts for creating/encoding Mails.
 //!
-//TODO[NOW]: work flow documentation
 
-use std::ops::Deref;
-use std::fmt;
+
+use std::{
+    ops::Deref,
+    fmt,
+    mem
+};
 
 use soft_ascii_string::SoftAsciiString;
-use futures::{ future, Future, Async, Poll };
+use futures::{
+    future,
+    Future,
+    Async,
+    Poll
+};
+use media_type::BOUNDARY;
 
-use common::MailType;
-use common::encoder::{EncodableInHeader, EncodingBuffer};
+use common::{
+    MailType,
+    encoder::EncodingBuffer
+};
 use headers::{
-    HeaderTryInto, Header, HeaderMap,
-    ContentType, _From,
-    ContentTransferEncoding,
-    Date, MessageId
-};
-use headers::components::DateTime;
-use headers::error::{
-    HeaderValidationError, BuildInValidationError
+    Header, HeaderKind,
+    HeaderMap,
+    headers::{
+        ContentType, _From,
+        ContentTransferEncoding,
+        Date, MessageId
+    },
+    header_components::{
+        DateTime,
+        MediaType
+    },
+    error::{
+        HeaderValidationError,
+    }
 };
 
-use ::error::{MailError, BuilderError};
+use ::mime::create_random_boundary;
+use ::error::{MailError, OtherVaidationError};
 use ::context::Context;
 
-use self::builder::{ check_header, check_multiple_headers };
-pub use self::builder::{ Builder, MultipartBuilder, SinglepartBuilder };
 pub use self::resource::*;
 
 pub mod context;
 mod resource;
-mod builder;
 mod encode;
 
 /// A type representing a Mail.
@@ -55,10 +70,12 @@ mod encode;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// # use futures::Future;
 /// # use mail_common::MailType;
-/// # use headers::components::Domain;
 /// use std::str;
 /// // either from `mail::headers` or from `mail_header as headers`
-/// use headers::*;
+/// use headers::{
+///     headers::*,
+///     header_components::Domain
+/// };
 /// use mail_types::{
 ///     Mail, Resource,
 ///     default_impl::simple_context
@@ -72,12 +89,12 @@ mod encode;
 /// let ctx = simple_context::new(domain, "xqi93".parse().unwrap())
 ///     .unwrap();
 ///
-/// let mut mail = Mail::plain_text("Hy there!").unwrap();
-/// mail.set_headers(headers! {
+/// let mut mail = Mail::plain_text("Hy there!");
+/// mail.insert_headers(headers! {
 ///     _From: [("I'm Awesome", "bla@examle.com")],
 ///     _To: ["unknow@example.com"],
 ///     Subject: "Hy there message"
-/// }.unwrap()).unwrap();
+/// }.unwrap());
 ///
 /// // We don't added anythink which needs loading but we could have
 /// // and all of it would have been loaded concurrent and async.
@@ -97,18 +114,19 @@ mod encode;
 /// # extern crate mail_types;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// // either from `mail::headers` or from `mail_header as headers`
-/// use headers::*;
-/// use mail_types::{Mail, Builder, Resource};
+/// use headers::{
+///     headers::*
+/// };
+/// use mail_types::{Mail,  Resource};
 ///
 /// # fn main() {
 /// let resource = Resource::sourceless_from_string("Hy there!");
-/// let mail = Builder::singlepart(resource)
-///     .headers(headers! {
-///         _From: [("I'm Awesome", "bla@examle.com")],
-///         _To: ["unknow@example.com"],
-///         Subject: "Hy there message"
-///     }.unwrap()).unwrap()
-///     .build().unwrap();
+/// let mut mail = Mail::new_singlepart_mail(resource);
+/// mail.insert_headers(headers! {
+///     _From: [("I'm Awesome", "bla@examle.com")],
+///     _To: ["unknow@example.com"],
+///     Subject: "Hy there message"
+/// }.unwrap());
 /// # }
 /// ```
 ///
@@ -119,30 +137,30 @@ mod encode;
 /// # extern crate mail_types;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// // either from `mail::headers` or from `mail_header as headers`
-/// use headers::*;
-/// use mail_types::{Mail, Builder, Resource, mime::gen_multipart_media_type};
+/// use headers::{
+///     headers::*,
+///     header_components::MediaType
+/// };
+/// use mail_types::{Mail, Resource};
 ///
 /// # fn main() {
-/// let sub_body1 = Mail::plain_text("Body 1").unwrap();
-/// let sub_body2 = Mail::plain_text("Body 2, yay").unwrap();
+/// let sub_body1 = Mail::plain_text("Body 1");
+/// let sub_body2 = Mail::plain_text("Body 2, yay");
 ///
 /// // This will generate `multipart/x.made-up-think; boundary=randome_generate_boundary`
-/// let media_type = gen_multipart_media_type("x.made-up-thing").unwrap();
-/// let mail = Builder::multipart(media_type).unwrap()
-///     .body(sub_body1).unwrap()
-///     .body(sub_body2).unwrap()
-///     .headers(headers! {
-///         _From: [("I'm Awesome", "bla@examle.com")],
-///         _To: ["unknow@example.com"],
-///         Subject: "Hy there message"
-///     }.unwrap()).unwrap()
-///     .build().unwrap();
+/// let media_type = MediaType::new("multipart", "x.made-up-thing").unwrap();
+/// let mut mail = Mail::new_multipart_mail(media_type, vec![sub_body1, sub_body2]);
+/// mail.insert_headers(headers! {
+///     _From: [("I'm Awesome", "bla@examle.com")],
+///     _To: ["unknow@example.com"],
+///     Subject: "Hy there message"
+/// }.unwrap());
 /// # }
 /// ```
 #[derive(Clone, Debug)]
 pub struct Mail {
     headers: HeaderMap,
-    body: MailPart,
+    body: MailBody,
 }
 
 /// A type which either represents a single body, or multiple modies.
@@ -152,7 +170,7 @@ pub struct Mail {
 /// so we have to differ between both kinds (instead of just having
 /// a `Vec` of mails)
 #[derive(Clone, Debug)]
-pub enum MailPart {
+pub enum MailBody {
     SingleBody {
         body: Resource
     },
@@ -168,127 +186,170 @@ pub enum MailPart {
     }
 }
 
-/// A future resolving to an encodeable mail.
-///
-/// The future resolves like this:
-///
-/// 1. it makes sure all contained futures are resolved, i.e. all
-///    `Resources` are loaded and transfer encoded if needed
-/// 2. it inserts auto-generated headers, i.e. `Content-Type`,
-///    `Content-Transfer-Encoding` are generated and `Date`, too if
-///    it is needed.
-///     1. If needed it generates a boundary for the `Content-Type`
-/// 3. contextual validators are used (including a check if there is
-///    a `From` header)
-/// 4. as the mail is now ready to be encoded it resolves to an
-///    `EncodableMail`
-///
-/// # Error (while resolving the future)
-///
-/// - if one of the contained futures fails, e.g. if a resource can not
-///   be loaded or encoded
-/// - if a contextual validator fails, e.g. `From` header is missing or
-///   there is a multi mailbox `From` header but no `Sender` header
-///
-pub struct MailFuture<T: Context> {
-    mail: Option<Mail>,
-    ctx: T,
-    inner: future::JoinAll<Vec<ResourceLoadingFuture<T>>>,
-}
-
-/// a mail with all contained futures resolved, so that it can be encoded
-//#[derive(Clone)]
-pub struct EncodableMail(Mail, Vec<ResourceAccessGuard>);
-
 impl Mail {
 
-    pub fn plain_text(text: impl Into<String>) -> Result<Self, BuilderError> {
+    /// Create a new plain text mail.
+    ///
+    /// This will
+    ///
+    /// - turn the `text` into a `String`
+    /// - create a `Resource` from the `String`
+    ///   (with content type `text/plain; charset=utf-8`)
+    /// - create a mail from the resource
+    ///
+    pub fn plain_text(text: impl Into<String>) -> Self {
         let resource = Resource::sourceless_from_string(text);
-        Builder::singlepart(resource).build()
+        Mail::new_singlepart_mail(resource)
     }
 
-    /// Add a new header, converting the header component `comp` to the right type.
-    ///
-    /// Note that some headers namely `Content-Transfer-Encoding` and
-    /// for singlepart mails `Content-Type` are derived from the content
-    /// and _cannot_ be set. Also `Date` is auto-generated if not set.
-    ///
-    /// Be aware that while the most know headers (like `From`) should only
-    /// appear one time others can appear multiple times. This function just
-    /// adds another header. It doesn't check if a header with the same name
-    /// was already set _and_ if the header should only appear one time.
-    ///
-    /// # Error
-    ///
-    /// An error is returned if:
-    ///
-    /// - A `Content-Type` header is set in for a single part mail, or
-    ///   a `Content-Type` header which is not `multipart` is set for an
-    ///   multipart mail.
-    ///
-    /// - A `Content-Transfer-Encoding` header is set
-    ///
-    pub fn set_header<H, C>(&mut self, header: H, comp: C)
-        -> Result<(), BuilderError>
-        where H: Header,
-              H::Component: EncodableInHeader,
-              C: HeaderTryInto<H::Component>
-    {
-        let comp = comp.try_into()?;
-        check_header::<H>(&comp, self.body.is_multipart())?;
-        self.headers.insert(header, comp)?;
-        Ok(())
+    /// Returns true if the body of the mail is a multipart body.
+    pub fn has_multipart_body(&self) -> bool {
+        self.body.is_multipart()
     }
 
-    /// Sets all header from the provided header map.
-    pub fn set_headers(&mut self, headers: HeaderMap)
-        -> Result<(), BuilderError>
+    /// Create a new multipart mail with given content type and given bodies.
+    ///
+    /// Note that while the given `content_type` has to be a `multipart` content
+    /// type (when encoding the mail) it is not required nor expected to have the
+    /// boundary parameter. The boundary will always be automatically generated
+    /// independently of wether or not it was passed as media type.
+    pub fn new_multipart_mail(content_type: MediaType, bodies: Vec<Mail>) -> Self {
+        let mut headers = HeaderMap::new();
+        headers.insert(ContentType::_body(content_type));
+        Mail {
+            headers,
+            body: MailBody::MultipleBodies {
+                bodies,
+                hidden_text: SoftAsciiString::new()
+            }
+        }
+    }
+
+    /// Create a new non-multipart mail for given `Resource` as body.
+    pub fn new_singlepart_mail(body: Resource) -> Self {
+        let headers = HeaderMap::new();
+        Mail {
+            headers,
+            body: MailBody::SingleBody { body }
+        }
+    }
+
+
+    /// Inserts a new header into the header map.
+    ///
+    /// This will call `insert` on the inner `HeaderMap`,
+    /// which means all behavior of `HeaderMap::insert`
+    /// does apply, like e.g. the "max one" behavior.
+    pub fn insert_header<H>(&mut self, header: Header<H>)
+        where H: HeaderKind
     {
-        check_multiple_headers(&headers, self.body.is_multipart())?;
-        self.headers.combine(headers);
-        Ok(())
+        self.headers_mut().insert(header);
+    }
+
+    /// Inserts all headers into the inner header map.
+    ///
+    /// This will call `HeaderMap::insert_all` internally
+    /// which means all behavior of `HeaderMap::insert`
+    /// does apply, like e.g. the "max one" behavior.
+    pub fn insert_headers(&mut self, headers: HeaderMap) {
+        self.headers_mut().insert_all(headers);
     }
 
     /// Returns a reference to the currently set headers.
     ///
-    /// Note that some headers namely `Content-Transfer-Encoding` and
-    /// for singlepart mails `Content-Type` are derived from the content
-    /// and _cannot_ be set. Also `Date` is auto-generated if not set.
+    /// Note that some headers namely `Content-Transfer-Encoding` as well
+    /// as `Content-Type` for singlepart mails are derived from the content
+    /// and _should not_ be set. If done so they are either ignored or an
+    /// error is caused by them in other parts of the crate (like e.g. encoding).
+    /// Also `Date` is auto-generated if not set and it is needed.
     pub fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
+    /// Return a mutable reference to the currently set headers.
+    pub fn headers_mut(&mut self) -> &mut HeaderMap {
+        &mut self.headers
+    }
+
     /// Returns a reference to the body/bodies.
-    pub fn body(&self) -> &MailPart {
+    pub fn body(&self) -> &MailBody {
         &self.body
     }
 
-    //TODO potentially change it into as_encodable_mail(&mut self)
-    /// Turns the mail into a future with resolves to an `EncodeableMail`
+    /// Return a mutable reference to the body/bodies.
+    pub fn body_mut(&mut self) -> &mut MailBody {
+        &mut self.body
+    }
+
+    /// Validate the mail.
+    ///
+    /// This will mainly validate the mail headers by
+    ///
+    /// - checking if no ContentTransferHeader is given
+    /// - (for mails with multipart bodies) checking if the content type
+    ///   is a `multipart` media type
+    /// - (for mail with non-multipart bodies) check if there is _no_
+    ///   content type header (as the content type header will be derived
+    ///   from he `Resource`)
+    /// - running all header validators (with `use_contextual_validators`) this
+    ///   also checks for "max one" consistency (see `HeaderMap`'s documentation
+    ///   for more details)
+    /// - doing this recursively with all contained mails
+    ///
+    /// Note that this will be called by `into_encodeable_mail`, therefor
+    /// it is normally not required to call this function by yourself.
+    ///
+    /// **Be aware that this does a general validation applicable to both the
+    /// top level headers and headers from multipart mail sub bodies.** This
+    /// means it e.g. doesn't check if there are any of the required headers
+    /// (`Date` and `From`).
+    pub fn generally_validate_mail(&self) -> Result<(), MailError> {
+        if self.has_multipart_body() {
+            validate_multipart_headermap(self.headers())?;
+        } else {
+            validate_singlepart_headermap(self.headers())?;
+        }
+        match self.body() {
+            &MailBody::SingleBody { .. } => {},
+            &MailBody::MultipleBodies { ref bodies, .. } => {
+                for body in bodies {
+                    body.generally_validate_mail()?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Turns the mail into a future with resolves to an `EncodeableMail`.
+    ///
+    /// While this future resolves it will do following thinks:
+    ///
+    /// 1. Validate the mail.
+    ///    - This uses `generally_validate_mail`.
+    ///    - Additionally it does check for required top level headers
+    ///      which will not be auto-generated (the `From` header).
+    ///
+    /// 2. make sure all contained `Resources` are loaded
+    ///    so that they can be used directly when encoding
+    ///    - Note that all resources are loaded concurrently, or at last
+    ///      the futures driving the loading are resolved concurrently.
+    ///
+    /// 3. insert all auto generated headers (like e.g. `Date` or
+    ///    `ContentTransferEncoding`)
     ///
     /// Use this if you want to encode a mail. This is needed as `Resource`
     /// instances used in the mail are loaded "on-demand", i.e. if you attach
     /// two images but never turn the mail into an encodable mail the images
     /// are never loaded from disk.
+    ///
     pub fn into_encodeable_mail<C: Context>(self, ctx: C) -> MailFuture<C> {
-        let mut futures = Vec::new();
-        //FIXME[rust/! type]: use ! instead of (),
-        // alternatively use futures::Never if futures >= 0.2
-        self.walk_mail_bodies::<_, ()>(&mut |resource: &Resource| {
-            Ok(futures.push(resource.create_loading_future(ctx.clone())))
-        }).unwrap();
-
-        MailFuture {
-            ctx,
-            inner: future::join_all(futures),
-            mail: Some(self)
-        }
+        MailFuture::new(self, ctx)
     }
 
     fn walk_mail_bodies<FN, E>(&self, use_it_fn: &mut FN) -> Result<(), E>
         where FN: FnMut(&Resource) -> Result<(), E>
     {
-        use self::MailPart::*;
+        use self::MailBody::*;
         match self.body {
             SingleBody { ref  body } =>
                 use_it_fn(body)?,
@@ -301,11 +362,12 @@ impl Mail {
     }
 }
 
-impl MailPart {
+
+impl MailBody {
 
     /// Returns `true` if it's an multipart body.
     pub fn is_multipart(&self) -> bool {
-        use self::MailPart::*;
+        use self::MailBody::*;
         match *self {
             SingleBody { .. } => false,
             MultipleBodies { .. } => true
@@ -313,6 +375,28 @@ impl MailPart {
     }
 }
 
+/// A future resolving to an encodeable mail.
+pub struct MailFuture<C: Context> {
+    inner: InnerMailFuture<C>
+}
+
+enum InnerMailFuture<C: Context> {
+    New { mail: Mail, ctx: C },
+    Loading {
+        mail: Mail,
+        pending: future::JoinAll<Vec<ResourceLoadingFuture<C>>>,
+        ctx: C
+    },
+    Poison
+}
+
+impl<C> MailFuture<C>
+    where C: Context
+{
+    fn new(mail: Mail, ctx: C) -> Self {
+        MailFuture { inner: InnerMailFuture::New { mail, ctx } }
+    }
+}
 
 impl<T> Future for MailFuture<T>
     where T: Context,
@@ -321,12 +405,52 @@ impl<T> Future for MailFuture<T>
     type Error = MailError;
 
     fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-        let anti_unload_guards = try_ready!(self.inner.poll());
-        let mail = self.mail.take().unwrap();
-        let enc_mail = EncodableMail::from_loaded_mail(mail, anti_unload_guards, &self.ctx)?;
-        Ok(Async::Ready(enc_mail))
+        use self::InnerMailFuture::*;
+        loop {
+            let state = mem::replace(&mut self.inner, InnerMailFuture::Poison);
+            match state {
+                New { mail, ctx } => {
+                    mail.generally_validate_mail()?;
+                    top_level_validation(&mail)?;
+
+                    let mut futures = Vec::new();
+                    mail.walk_mail_bodies::<_, ()>(&mut |resource: &Resource| {
+                        Ok(futures.push(resource.create_loading_future(ctx.clone())))
+                    }).unwrap();
+
+                    mem::replace(
+                        &mut self.inner,
+                        InnerMailFuture::Loading {
+                            mail, ctx,
+                            pending: future::join_all(futures)
+                        }
+                    );
+                },
+                Loading { mut mail, mut pending, ctx } => {
+                    match pending.poll() {
+                        Err(err) => return Err(err.into()),
+                        Ok(Async::NotReady) => {
+                            mem::replace(
+                                &mut self.inner,
+                                InnerMailFuture::Loading { mail, pending, ctx }
+                            );
+                            return Ok(Async::NotReady);
+                        },
+                        Ok(Async::Ready(guards)) => {
+                            auto_gen_headers(&mut mail, &ctx);
+                            return Ok(Async::Ready(EncodableMail(mail, guards)));
+                        }
+                    }
+                },
+                Poison => panic!("called again after completion (through value, error or panic)")
+            }
+        }
     }
 }
+
+/// a mail with all contained futures resolved, so that it can be encoded
+//#[derive(Clone)]
+pub struct EncodableMail(Mail, Vec<ResourceAccessGuard>);
 
 impl EncodableMail {
 
@@ -351,80 +475,88 @@ impl EncodableMail {
         self.encode(&mut buffer)?;
         Ok(buffer.into())
     }
+}
 
-    fn from_loaded_mail(
-        mut mail: Mail,
-        anti_unload_guards: Vec<ResourceAccessGuard>,
-        ctx: &impl Context
-    )
-        -> Result<Self, MailError>
-    {
-        recursively_insert_generated_headers(&mut mail)?;
-
-        auto_gen_top_level_only_headers(&mut mail.headers, ctx)?;
-
-        check_required_headers(&mail.headers)?;
-
-        mail.headers.use_contextual_validators()?;
-
-        Ok(EncodableMail(mail, anti_unload_guards))
+fn top_level_validation(mail: &Mail) -> Result<(), HeaderValidationError> {
+    if mail.headers().contains(_From) {
+        Ok(())
+    } else {
+        Err(OtherVaidationError::NoFrom.into())
     }
 }
 
 /// inserts ContentType and ContentTransferEncoding into
-/// the headers of any contained `MailPart::SingleBody`,
+/// the headers of any contained `MailBody::SingleBody`,
 /// based on the `Resource` representing the body
-fn recursively_insert_generated_headers(mail: &mut Mail) -> Result<(), MailError> {
-    match mail.body {
-        MailPart::SingleBody { ref body } => {
-           auto_gen_headers(&mut mail.headers, body)?;
+fn auto_gen_headers<C: Context>(mail: &mut Mail, ctx: &C) {
+    {
+        let headers = mail.headers_mut();
+        if !headers.contains(Date) {
+            headers.insert(Date::_body(DateTime::now()));
         }
-        MailPart::MultipleBodies { ref mut bodies, .. } => {
+
+        if !headers.contains(MessageId) {
+            headers.insert(MessageId::_body(ctx.generate_message_id()));
+        }
+    }
+    recursive_auto_gen_headers(mail, ctx);
+}
+
+fn recursive_auto_gen_headers<C: Context>(mail: &mut Mail, ctx: &C) {
+    let &mut Mail { ref mut headers, ref mut body } = mail;
+    match body {
+        &mut MailBody::SingleBody { ref mut body } => {
+            let file_buffer = body.get_if_encoded()
+                .expect("[BUG] encoded mail, should only contain already transferencoded resources");
+            headers.insert(ContentType::_body(file_buffer.content_type().clone()));
+            headers.insert(ContentTransferEncoding::_body(file_buffer.transfer_encoding().clone()));
+        },
+        &mut MailBody::MultipleBodies { ref mut bodies, .. } => {
+            let mut headers: &mut HeaderMap = headers;
+            let content_type: &mut Header<ContentType> = headers
+                .get_single_mut(ContentType)
+                .expect("[BUG] mail was already validated")
+                .expect("[BUG] mail was already validated");
+
+            content_type.set_param(BOUNDARY, create_random_boundary());
+
             for sub_mail in bodies {
-                recursively_insert_generated_headers(sub_mail)?;
+                recursive_auto_gen_headers(sub_mail, ctx);
             }
         }
-
-    }
-    Ok(())
-}
-
-/// check if headers which are generally required are in the header map
-///
-/// Normally constraints are checked through the validators, but this won't
-/// work if there is no guarantee the validator was inserted. This only applies
-/// for `Date`, `From` as they have to appear once no matter what. But `Date`
-/// is auto generated so only `From` is checked here.
-/// The only required headers are `From` and `Date`, all other quantitative
-/// constraints can be checked with contextual validators,
-fn check_required_headers(headers: &HeaderMap) -> Result<(), MailError> {
-    if headers.contains(_From) {
-        Ok(())
-    } else {
-        Err(HeaderValidationError::from(BuildInValidationError::NoFrom).into())
     }
 }
 
-fn auto_gen_headers(headers: &mut HeaderMap, body: &Resource) -> Result<(), MailError> {
-    let file_buffer = body.get_if_encoded()
-        .expect("[BUG] encoded mail, should only contain already transferencoded resources");
-
-    headers.insert(ContentType, file_buffer.content_type().clone())?;
-    headers.insert(ContentTransferEncoding, file_buffer.transfer_encoding().clone())?;
-    Ok(())
-}
-
-fn auto_gen_top_level_only_headers(headers: &mut HeaderMap, ctx: &impl Context)
+pub(crate) fn validate_multipart_headermap(headers: &HeaderMap)
     -> Result<(), MailError>
 {
-    if !headers.contains(Date) {
-        headers.insert(Date, DateTime::now())?;
-    }
 
-    if !headers.contains(MessageId) {
-        headers.insert(MessageId, ctx.generate_message_id())?;
+    if headers.contains(ContentTransferEncoding) {
+        return Err(OtherVaidationError::ContentTransferEncodingHeaderGiven.into());
     }
+    if let Some(header) = headers.get_single(ContentType) {
+        let header_with_right_type = header?;
+        if !header_with_right_type.is_multipart() {
+            return Err(OtherVaidationError::SingleMultipartMixup.into());
+        }
+    } else {
+        return Err(OtherVaidationError::MissingContentTypeHeader.into());
+    }
+    headers.use_contextual_validators()?;
+    Ok(())
+}
 
+
+pub(crate) fn validate_singlepart_headermap(headers: &HeaderMap)
+    -> Result<(), HeaderValidationError>
+{
+    if headers.contains(ContentTransferEncoding) {
+        return Err(OtherVaidationError::ContentTransferEncodingHeaderGiven.into());
+    }
+    if headers.contains(ContentType) {
+        return Err(OtherVaidationError::ContentTypeHeaderGiven.into());
+    }
+    headers.use_contextual_validators()?;
     Ok(())
 }
 
@@ -437,8 +569,27 @@ impl Deref for EncodableMail {
 }
 
 impl Into<Mail> for EncodableMail {
-    fn into( self ) -> Mail {
-        self.0
+    fn into(self) -> Mail {
+        let EncodableMail(mut mail, _) = self;
+        strip_encodable_mail(&mut mail);
+        mail
+    }
+}
+
+fn strip_encodable_mail(mail: &mut Mail) {
+    let &mut Mail { ref mut headers, ref mut body } = mail;
+
+    match body {
+        &mut MailBody::SingleBody { .. } => {
+            headers.remove(ContentType);
+            headers.remove(ContentTransferEncoding);
+        },
+        &mut MailBody::MultipleBodies { ref mut bodies, .. } => {
+            headers.remove(ContentTransferEncoding);
+            for mail in bodies {
+                strip_encodable_mail(mail)
+            }
+        }
     }
 }
 
@@ -452,7 +603,7 @@ impl fmt::Debug for EncodableMail {
 #[cfg(test)]
 mod test {
     use std::fmt::Debug;
-    use headers::components::MediaType;
+    use headers::header_components::MediaType;
     use ::file_buffer::FileBuffer;
     use ::Resource;
 
@@ -470,9 +621,11 @@ mod test {
     mod Mail {
         #![allow(non_snake_case)]
         use std::str;
-        use headers::components::TransferEncoding;
         use headers::{
-            Subject, Comments
+            headers::{
+                Subject,
+                Comments
+            }
         };
         use default_impl::test_context;
         use super::super::*;
@@ -494,21 +647,21 @@ mod test {
         fn walk_mail_bodies_does_not_skip() {
             let mail = Mail {
                 headers: HeaderMap::new(),
-                body: MailPart::MultipleBodies {
+                body: MailBody::MultipleBodies {
                     bodies: vec! [
                         Mail {
                             headers: HeaderMap::new(),
-                            body: MailPart::MultipleBodies {
+                            body: MailBody::MultipleBodies {
                                 bodies: vec! [
                                     Mail {
                                         headers: HeaderMap::new(),
-                                        body: MailPart::SingleBody {
+                                        body: MailBody::SingleBody {
                                             body: resource_from_text("r1")
                                         }
                                     },
                                     Mail {
                                         headers: HeaderMap::new(),
-                                        body: MailPart::SingleBody {
+                                        body: MailBody::SingleBody {
                                             body: resource_from_text("r2")
                                         }
                                     }
@@ -518,7 +671,7 @@ mod test {
                         },
                         Mail {
                             headers: HeaderMap::new(),
-                            body: MailPart::SingleBody {
+                            body: MailBody::SingleBody {
                                 body: resource_from_text("r3")
                             }
                         }
@@ -545,7 +698,7 @@ mod test {
         fn walk_mail_bodies_handles_errors() {
             let mail = Mail {
                 headers: HeaderMap::new(),
-                body: MailPart::SingleBody {
+                body: MailBody::SingleBody {
                     body: resource_from_text("r0"),
                 }
             };
@@ -553,76 +706,36 @@ mod test {
             assert_err!(mail.walk_mail_bodies::<_, ()>(&mut |_| { Err(()) }));
         }
 
-        #[test]
-        fn set_header_checks_the_header() {
-            let mut mail = Mail {
-                headers: HeaderMap::new(),
-                body: MailPart::SingleBody {
-                    body: resource_from_text("r0"),
-                }
-            };
-
-            assert_err!(
-                mail.set_header(ContentTransferEncoding, TransferEncoding::Base64));
-            //Note: a more fine grained test is done in ::mail::builder::test
-            assert_err!(mail.set_header(ContentType, "text/plain"));
-            assert_err!(mail.set_header(ContentType, "multipart/plain"));
-        }
-
-        #[test]
-        fn set_header_set_a_header() {
-            let mut mail = Mail {
-                headers: HeaderMap::new(),
-                body: MailPart::SingleBody {
-                    body: resource_from_text("r0"),
-                }
-            };
-            assert_ok!(mail.set_header(Subject, "hy"));
+        test!(insert_header_set_a_header, {
+            let mut mail = Mail::plain_text("r0");
+            mail.insert_header(Subject::body("hy")?);
             assert!(mail.headers().contains(Subject));
-        }
+        });
 
-        #[test]
-        fn set_headers_checks_the_headers() {
-            let mut mail = Mail {
-                headers: HeaderMap::new(),
-                body: MailPart::SingleBody {
-                    body: resource_from_text("r0"),
-                }
-            };
-            assert_err!(mail.set_headers(headers! {
-                ContentType: "test/html;charset=utf8"
-            }.unwrap()));
-        }
 
-        #[test]
-        fn set_headers_sets_all_headers() {
-            let mut mail = Mail {
-                headers: HeaderMap::new(),
-                body: MailPart::SingleBody {
-                    body: resource_from_text("r0"),
-                }
-            };
-            assert_ok!(mail.set_headers(headers! {
+
+        test!(insert_headers_sets_all_headers, {
+            let mut mail = Mail::plain_text("r0");
+            mail.insert_headers(headers! {
                 Subject: "yes",
                 Comments: "so much"
-            }.unwrap()));
+            }?);
 
             assert!(mail.headers().contains(Subject));
             assert!(mail.headers().contains(Comments));
-        }
+        });
 
     }
 
     mod EncodableMail {
         #![allow(non_snake_case)]
         use chrono::{Utc, TimeZone};
-        use headers::components::{
-            TransferEncoding,
-            DateTime
-        };
         use headers::{
-            _From, ContentType, ContentTransferEncoding,
-            Date, Subject
+            header_components::TransferEncoding,
+            headers::{
+                _From, ContentType, ContentTransferEncoding,
+                Date, Subject
+            }
         };
         use default_impl::test_context;
         use super::super::*;
@@ -641,7 +754,7 @@ mod test {
                     _From: ["random@this.is.no.mail"],
                     Subject: "hoho"
                 }.unwrap(),
-                body: MailPart::SingleBody { body: resource }
+                body: MailBody::SingleBody { body: resource }
             };
 
             let ctx = test_context();
@@ -666,7 +779,7 @@ mod test {
                 .unwrap()
                 .unwrap();
 
-            assert_eq!(res, &TransferEncoding::QuotedPrintable);
+            assert_eq!(res.body(), &TransferEncoding::QuotedPrintable);
         }
 
         #[test]
@@ -678,11 +791,11 @@ mod test {
                     Subject: "hoho",
                     ContentType: "multipart/mixed"
                 }.unwrap(),
-                body: MailPart::MultipleBodies {
+                body: MailBody::MultipleBodies {
                     bodies: vec![
                         Mail {
                             headers: HeaderMap::new(),
-                            body: MailPart::SingleBody { body: resource }
+                            body: MailBody::SingleBody { body: resource }
                         }
                     ],
                     hidden_text: Default::default()
@@ -698,7 +811,7 @@ mod test {
             //the Builder would have set it but as we didn't use it (intentionally) it's not set
             //assert!(headers.contains(ContentType));
 
-            if let MailPart::MultipleBodies { ref bodies, ..} = mail.body {
+            if let MailBody::MultipleBodies { ref bodies, ..} = mail.body {
                 let headers = bodies[0].headers();
                 assert_not!(headers.contains(Date));
 
@@ -712,7 +825,7 @@ mod test {
                     .unwrap()
                     .unwrap();
 
-                assert_eq!(res, &TransferEncoding::QuotedPrintable);
+                assert_eq!(res.body(), &TransferEncoding::QuotedPrintable);
 
             } else {
                 unreachable!()
@@ -726,7 +839,7 @@ mod test {
                     _From: ["random@this.is.no.mail", "u.p.s@s.p.u"],
                     Subject: "hoho"
                 }.unwrap(),
-                body: MailPart::SingleBody { body: resource_from_text("r9") }
+                body: MailBody::SingleBody { body: resource_from_text("r9") }
             };
 
             let ctx = test_context();
@@ -739,24 +852,21 @@ mod test {
                 headers: headers!{
                     Subject: "hoho"
                 }.unwrap(),
-                body: MailPart::SingleBody { body: resource_from_text("r9") }
+                body: MailBody::SingleBody { body: resource_from_text("r9") }
             };
 
             let ctx = test_context();
             assert_err!(mail.into_encodeable_mail(ctx).wait());
         }
 
-        #[test]
-        fn does_not_override_date_if_set() {
+        test!(does_not_override_date_if_set, {
             let provided_date = Utc.ymd(1992, 5, 25).and_hms(23, 41, 12);
-            let mail = Mail {
-                headers: headers!{
-                    _From: ["random@this.is.no.mail"],
-                    Subject: "hoho",
-                    Date: DateTime::new(provided_date.clone())
-                }.unwrap(),
-                body: MailPart::SingleBody { body: resource_from_text("r9") }
-            };
+            let mut mail = Mail::plain_text("r9");
+            mail.insert_headers(headers! {
+                _From: ["random@this.is.no.mail"],
+                Subject: "hoho",
+                Date: provided_date.clone()
+            }?);
 
             let ctx = test_context();
             let enc_mail = assert_ok!(mail.into_encodeable_mail(ctx).wait());
@@ -765,10 +875,8 @@ mod test {
                 .unwrap()
                 .unwrap();
 
-            assert_eq!(**used_date, provided_date);
-
-
-        }
+            assert_eq!(&**used_date.body(), &provided_date);
+        });
 
     }
 

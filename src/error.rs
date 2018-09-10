@@ -153,28 +153,21 @@ impl From<io::Error> for ResourceLoadingError {
 }
 
 
-
-/// Some additional reasons why building a mail might fail.
-#[derive(Copy, Clone, Debug, Fail, PartialEq, Eq, Hash)]
-pub enum OtherBuilderErrorKind {
-    //TODO[NOW] isn't this an duplicate with `InsertSinglePartContentType`
-    /// Builder tried to insert `Content-Type` header.
+#[derive(Debug, Fail)]
+pub enum OtherVaidationError {
+    /// Non-multipart mail headers derive the Content-Type header from it's body `Resource`.
     ///
-    /// But that header is _always_ auto-generated based
-    /// on the body.
-    #[fail(display = "inserting Content-Type manually is not allowed")]
-    InsertingContentTypeHeader,
+    /// This error is returned if a `Content-Type` header was given never the less.
+    #[fail(display = "Content-Type header given for non multipart mail")]
+    ContentTypeHeaderGiven,
 
-    /// Builder tried to insert `Content-Transfer-Encoding` header.
-    ///
-    /// But that header is _always_ auto-generated based
-    /// on the body.
-    #[fail(display = "inserting Content-Transfer-Encoding manually is not allowed")]
-    InsertingContentTransferEncodingHeader,
+    /// `Content-Transfer-Encoding` headers are always auto-generated
+    /// and can not be manually set.
+    #[fail(display = "Content-Transfer-Encoding header given")]
+    ContentTransferEncodingHeaderGiven,
 
-    //TODO[NOW] shouldn't this be MultipartContentTypeInSinglepartBody
-    ///
-    #[fail(display = "inserting a header changing if a body is single/multipart is not allowed")]
+    /// A non "multipart" media type was given as content type for a multipart mail.
+    #[fail(display = "found non multipart content type in multipart mail")]
     SingleMultipartMixup,
 
     /// Inserting a `Conent-Type` header into a singlepart body is not allowed.
@@ -184,56 +177,28 @@ pub enum OtherBuilderErrorKind {
     #[fail(display = "inserting Content-Type for singlepart body is not allowed")]
     InsertSinglepartContentTypeHeader,
 
-    /// This library only allows multipart bodies which contain at last one body.
-    #[fail(display = "multipart bodies need at last one part")]
-    EmptyMultipartBody
+    /// A multipart mail requires a `Content-Type` header to be given.
+    #[fail(display = "multipart mail does not contain a content type header")]
+    MissingContentTypeHeader,
+
+    /// A mail (top level, not in multipart) requires a `From` header to be given.
+    #[fail(display = "mail did not contain a From header")]
+    NoFrom
 }
 
-/// Building the mail failed.
-#[derive(Debug, Fail)]
-pub enum BuilderError {
-    /// A Type error can appear if multiple implementations for the same header
-    /// are mixed.
-    #[fail(display = "{}", _0)]
-    Type(HeaderTypeError),
-
-    /// Failed to create the required components.
-    ///
-    /// This can for example appear if you try to insert
-    /// a string as an `Email`/`Mailbox` component which
-    /// isn't a valid email address.
-    #[fail(display = "{}", _0)]
-    Component(ComponentCreationError),
-
-    /// A different kind of error occurred (see `OtherBuilderErrorKind`).
-    #[fail(display = "{}", _0)]
-    Other(Context<OtherBuilderErrorKind>)
-}
-
-impl From<OtherBuilderErrorKind> for BuilderError {
-    fn from(err: OtherBuilderErrorKind) -> Self {
-        BuilderError::Other(Context::new(err))
+impl From<OtherVaidationError> for HeaderValidationError {
+    fn from(oe: OtherVaidationError) -> Self {
+        let err: ::failure::Error = oe.into();
+        HeaderValidationError::Custom(err)
     }
 }
 
-impl From<Context<OtherBuilderErrorKind>> for BuilderError {
-    fn from(err: Context<OtherBuilderErrorKind>) -> Self {
-        BuilderError::Other(err)
+impl From<OtherVaidationError> for MailError {
+    fn from(oe: OtherVaidationError) -> Self {
+        let val_err = HeaderValidationError::from(oe);
+        MailError::from(val_err)
     }
 }
-
-impl From<HeaderTypeError> for BuilderError {
-    fn from(err: HeaderTypeError) -> Self {
-        BuilderError::Type(err)
-    }
-}
-
-impl From<ComponentCreationError> for BuilderError {
-    fn from(err: ComponentCreationError) -> Self {
-        BuilderError::Component(err)
-    }
-}
-
 
 /// General Error combining most other error wrt. mail creation and encoding.
 #[derive(Debug, Fail)]
@@ -242,9 +207,13 @@ pub enum MailError {
     #[fail(display = "{}", _0)]
     Encoding(EncodingError),
 
-    /// Creating the mail failed.
+    /// Different implementations for the same header where mixed up.
     #[fail(display = "{}", _0)]
-    Creation(BuilderError),
+    Type(HeaderTypeError),
+
+    /// Creating a mail header body (component) failed.
+    #[fail(display = "{}", _0)]
+    Component(ComponentCreationError),
 
     /// The mail has some invalid header or header combinations.
     ///
@@ -270,7 +239,7 @@ impl From<BuildInValidationError> for MailError {
 
 impl From<HeaderTypeError> for MailError {
     fn from(err: HeaderTypeError) -> Self {
-        MailError::Creation(BuilderError::Type(err))
+        MailError::Type(err)
     }
 }
 
@@ -280,11 +249,6 @@ impl From<EncodingError> for MailError {
     }
 }
 
-impl From<BuilderError> for MailError {
-    fn from(err: BuilderError) -> Self {
-        MailError::Creation(err)
-    }
-}
 
 impl From<HeaderValidationError> for MailError {
     fn from(err: HeaderValidationError) -> Self {
@@ -309,7 +273,7 @@ impl From<ResourceError> for MailError {
 
 impl From<ComponentCreationError> for MailError {
     fn from(err: ComponentCreationError) -> Self {
-        MailError::from(BuilderError::from(err))
+        MailError::Component(err)
     }
 }
 

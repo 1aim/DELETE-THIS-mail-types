@@ -2,10 +2,6 @@
 use rand;
 use rand::Rng;
 
-use headers::components::MediaType;
-use headers::error::ComponentCreationError;
-
-
 /// write a random sequence of chars valid for and boundary to the output buffer
 ///
 /// Note that it might be required to quote the boundary.
@@ -64,23 +60,6 @@ pub fn create_random_boundary() -> String {
     out.push(CHARS[last_idx]);
     out
 }
-
-/// Generate a media type in instance for a multipart media type based on an string naming the subtype.
-///
-/// This will generate a media type with:
-/// - type `multipart`
-/// - subtype as given (through it's parsed to make sure it's valid)
-/// - one parameter `boundary` with a random boundary
-pub fn gen_multipart_media_type<A>(subtype: A ) -> Result<MediaType, ComponentCreationError>
-    where A: AsRef<str>
-{
-    let boundary = create_random_boundary();
-    let media_type = MediaType::new_with_params("multipart", subtype.as_ref(), vec![
-        ("boundary", &*boundary)
-    ])?;
-    Ok(media_type)
-}
-
 
 
 #[cfg(test)]

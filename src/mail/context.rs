@@ -5,8 +5,11 @@ use std::fmt::Debug;
 use futures::{ future, Future, IntoFuture };
 use utils::SendBoxFuture;
 
+use headers::header_components::{
+    MediaType, MessageId, ContentId
+};
+
 use ::error::ResourceLoadingError;
-use ::headers::components::{MediaType, MessageId, ContentId};
 use ::file_buffer::FileBuffer;
 use ::iri::IRI;
 

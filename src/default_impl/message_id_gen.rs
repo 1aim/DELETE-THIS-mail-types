@@ -6,7 +6,7 @@ use rand;
 use soft_ascii_string::SoftAsciiString;
 
 use common::error::EncodingError;
-use headers::components::{MessageId, ContentId, Domain};
+use headers::header_components::{MessageId, ContentId, Domain};
 use ::context::MailIdGenComponent;
 
 
@@ -111,7 +111,7 @@ mod test {
         use std::sync::Arc;
         use std::collections::HashSet;
         use soft_ascii_string::SoftAsciiString;
-        use headers::components::Domain;
+        use headers::header_components::Domain;
         use headers::HeaderTryFrom;
 
         //NOTE: this is a rust bug, the import is not unused

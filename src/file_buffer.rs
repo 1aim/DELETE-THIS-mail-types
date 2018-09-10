@@ -13,11 +13,19 @@ use std::ops::Deref;
 
 use media_type::{TEXT, CHARSET};
 
-use common::utils::FileMeta;
-use common::bind::{quoted_printable, base64};
-use common::error::{EncodingError, UNKNOWN};
+use common::{
+    utils::FileMeta,
+    bind::{
+        quoted_printable,
+        base64
+    },
+    error::{
+        EncodingError,
+        UNKNOWN
+    }
+};
 
-use headers::components::{TransferEncoding, MediaType};
+use headers::header_components::{TransferEncoding, MediaType};
 
 
 
