@@ -39,7 +39,7 @@ use headers::{
 };
 
 use ::mime::create_random_boundary;
-use ::error::{MailError, OtherVaidationError};
+use ::error::{MailError, OtherValidationError};
 use ::context::Context;
 
 pub use self::resource::*;
@@ -481,7 +481,7 @@ fn top_level_validation(mail: &Mail) -> Result<(), HeaderValidationError> {
     if mail.headers().contains(_From) {
         Ok(())
     } else {
-        Err(OtherVaidationError::NoFrom.into())
+        Err(OtherValidationError::NoFrom.into())
     }
 }
 
@@ -532,15 +532,15 @@ pub(crate) fn validate_multipart_headermap(headers: &HeaderMap)
 {
 
     if headers.contains(ContentTransferEncoding) {
-        return Err(OtherVaidationError::ContentTransferEncodingHeaderGiven.into());
+        return Err(OtherValidationError::ContentTransferEncodingHeaderGiven.into());
     }
     if let Some(header) = headers.get_single(ContentType) {
         let header_with_right_type = header?;
         if !header_with_right_type.is_multipart() {
-            return Err(OtherVaidationError::SingleMultipartMixup.into());
+            return Err(OtherValidationError::SingleMultipartMixup.into());
         }
     } else {
-        return Err(OtherVaidationError::MissingContentTypeHeader.into());
+        return Err(OtherValidationError::MissingContentTypeHeader.into());
     }
     headers.use_contextual_validators()?;
     Ok(())
@@ -551,10 +551,10 @@ pub(crate) fn validate_singlepart_headermap(headers: &HeaderMap)
     -> Result<(), HeaderValidationError>
 {
     if headers.contains(ContentTransferEncoding) {
-        return Err(OtherVaidationError::ContentTransferEncodingHeaderGiven.into());
+        return Err(OtherValidationError::ContentTransferEncodingHeaderGiven.into());
     }
     if headers.contains(ContentType) {
-        return Err(OtherVaidationError::ContentTypeHeaderGiven.into());
+        return Err(OtherValidationError::ContentTypeHeaderGiven.into());
     }
     headers.use_contextual_validators()?;
     Ok(())

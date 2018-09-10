@@ -154,7 +154,7 @@ impl From<io::Error> for ResourceLoadingError {
 
 
 #[derive(Debug, Fail)]
-pub enum OtherVaidationError {
+pub enum OtherValidationError {
     /// Non-multipart mail headers derive the Content-Type header from it's body `Resource`.
     ///
     /// This error is returned if a `Content-Type` header was given never the less.
@@ -186,15 +186,15 @@ pub enum OtherVaidationError {
     NoFrom
 }
 
-impl From<OtherVaidationError> for HeaderValidationError {
-    fn from(oe: OtherVaidationError) -> Self {
+impl From<OtherValidationError> for HeaderValidationError {
+    fn from(oe: OtherValidationError) -> Self {
         let err: ::failure::Error = oe.into();
         HeaderValidationError::Custom(err)
     }
 }
 
-impl From<OtherVaidationError> for MailError {
-    fn from(oe: OtherVaidationError) -> Self {
+impl From<OtherValidationError> for MailError {
+    fn from(oe: OtherValidationError) -> Self {
         let val_err = HeaderValidationError::from(oe);
         MailError::from(val_err)
     }
