@@ -12,15 +12,16 @@ repository = "https://github.com/1aim/mail-types"
 
 
 [dependencies]
-failure = "0.1.1"
-futures = "0.1.14"
+failure = "0.1.2"
+futures = "0.1.24"
 log = "0.3.8"
 rand = "0.3.15"
-vec1 = "1.0"
+vec1 = "1"
 mail-common = { git="https://github.com/1aim/mail-common" }
 mail-headers = { git="https://github.com/1aim/mail-headers" }
-chrono = "0.4.0"
+chrono = "0.4"
 soft-ascii-string = "1.0"
+serde = { version="1.0", optional=true, features=["derive"] }
 
 [dependencies.mime]
 git="https://github.com/1aim/mime"
@@ -32,9 +33,10 @@ optional = true
 version = "0.1.5"
 
 [dev-dependencies]
-serde_json = "1.0.2"
+serde_json = "1.0"
 
 [features]
+partial-serialize = ["serde", "mail-headers/serde-impl"]
 default = ["default_impl_cpupool"]
 default_impl_cpupool = ["futures-cpupool"]
 

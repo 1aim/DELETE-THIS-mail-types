@@ -13,11 +13,14 @@ extern crate failure;
 extern crate mime as media_type;
 extern crate chrono;
 extern crate futures;
-#[cfg(feature="default_impl_cpupool")]
-extern crate futures_cpupool;
 extern crate rand;
 extern crate vec1;
 extern crate soft_ascii_string;
+#[cfg(feature="partial-serialize")]
+#[macro_use]
+extern crate serde;
+#[cfg(feature="default_impl_cpupool")]
+extern crate futures_cpupool;
 
 #[macro_use]
 extern crate mail_common as common;
@@ -36,6 +39,7 @@ pub mod context;
 mod resource;
 mod encode;
 mod mail;
+pub mod compose;
 
 pub mod default_impl;
 
