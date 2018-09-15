@@ -35,7 +35,7 @@ pub(crate) fn encode_mail(
     top: bool,
     encoder: &mut EncodingBuffer
 ) -> Result<(), MailError> {
-    _encode_mail(&mail.0, top, encoder)
+    _encode_mail(&*mail, top, encoder)
         .map_err(|err| {
             let mail_type = encoder.mail_type();
             use self::MailError::*;
@@ -80,7 +80,7 @@ fn encode_headers(
         handle.finish_header();
     }
 
-    for (name, hbody) in mail.headers.iter() {
+    for (name, hbody) in mail.headers().iter() {
         let name_as_str = name.as_str();
         let ignored_header = !top &&
             !(name_as_str.starts_with("Content-")
@@ -122,7 +122,7 @@ fn encode_mail_part(mail: &Mail, encoder:  &mut EncodingBuffer )
     let minus = SoftAsciiChar::from_unchecked('-');
 
     use super::MailBody::*;
-    match mail.body {
+    match mail.body() {
         SingleBody { ref body } => {
             encoder.write_body_unchecked(body)?;
         },

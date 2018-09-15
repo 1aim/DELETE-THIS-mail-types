@@ -41,12 +41,7 @@ use headers::{
 use ::mime::create_random_boundary;
 use ::error::{MailError, OtherValidationError};
 use ::context::Context;
-
-pub use self::resource::*;
-
-pub mod context;
-mod resource;
-mod encode;
+use ::resource::*;
 
 /// A type representing a Mail.
 ///
@@ -466,7 +461,7 @@ impl EncodableMail {
     /// input can not be encoded with the given mail type or
     /// some headers/resources breack the mails hard line length limit.
     pub fn encode(&self, encoder: &mut EncodingBuffer) -> Result<(), MailError> {
-        encode::encode_mail(self, true, encoder)
+        ::encode::encode_mail(self, true, encoder)
     }
 
     /// A wrapper for `encode` which will create a buffer, enocde the mail and then returns the buffers content.

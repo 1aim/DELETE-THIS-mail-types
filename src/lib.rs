@@ -32,10 +32,15 @@ pub mod error;
 pub mod utils;
 pub mod file_buffer;
 pub mod mime;
-pub mod mail;
+pub mod context;
+mod resource;
+mod encode;
+mod mail;
+
 pub mod default_impl;
 
-
 pub use self::iri::IRI;
+pub use self::resource::*;
 pub use self::mail::*;
+
 pub use ::context::{Context, Source};
