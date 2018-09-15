@@ -14,7 +14,6 @@ use std::ops::Deref;
 use media_type::{TEXT, CHARSET};
 
 use common::{
-    utils::FileMeta,
     bind::{
         quoted_printable,
         base64
@@ -25,7 +24,11 @@ use common::{
     }
 };
 
-use headers::header_components::{TransferEncoding, MediaType};
+use headers::header_components::{
+    TransferEncoding,
+    MediaType,
+    FileMeta
+};
 
 
 

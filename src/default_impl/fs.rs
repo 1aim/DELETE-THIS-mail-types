@@ -7,8 +7,10 @@ use std::marker::PhantomData;
 use failure::Fail;
 use futures::{ future, IntoFuture};
 
-use common::utils::FileMeta;
-use headers::header_components::MediaType;
+use headers::header_components::{
+    MediaType,
+    FileMeta
+};
 
 use ::IRI;
 use ::utils::{ConstSwitch, Enabled, Disabled};
