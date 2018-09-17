@@ -60,7 +60,7 @@ use ::resource::*;
 ///
 /// ```
 /// # extern crate futures;
-/// # extern crate mail_types;
+/// # extern crate mail_base;
 /// # extern crate mail_common;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// # use futures::Future;
@@ -71,7 +71,7 @@ use ::resource::*;
 ///     headers::*,
 ///     header_components::Domain
 /// };
-/// use mail_types::{
+/// use mail_base::{
 ///     Mail, Resource,
 ///     default_impl::simple_context
 /// };
@@ -106,13 +106,13 @@ use ::resource::*;
 /// builder:
 ///
 /// ```
-/// # extern crate mail_types;
+/// # extern crate mail_base;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// // either from `mail::headers` or from `mail_header as headers`
 /// use headers::{
 ///     headers::*
 /// };
-/// use mail_types::{Mail,  Resource};
+/// use mail_base::{Mail,  Resource};
 ///
 /// # fn main() {
 /// let resource = Resource::sourceless_from_string("Hy there!");
@@ -129,14 +129,14 @@ use ::resource::*;
 /// with a made up `multipart` type.
 ///
 /// ```
-/// # extern crate mail_types;
+/// # extern crate mail_base;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// // either from `mail::headers` or from `mail_header as headers`
 /// use headers::{
 ///     headers::*,
 ///     header_components::MediaType
 /// };
-/// use mail_types::{Mail, Resource};
+/// use mail_base::{Mail, Resource};
 ///
 /// # fn main() {
 /// let sub_body1 = Mail::plain_text("Body 1");

@@ -89,7 +89,7 @@ use super::context::{Context, Source};
 /// Create a resource from a string:
 ///
 /// ```
-/// # use mail_types::Resource;
+/// # use mail_base::Resource;
 /// // resoure with media type = "text/plain; charset=utf-8"
 /// let resource = Resource::sourceless_from_string("This is a text body");
 /// ```
@@ -98,7 +98,7 @@ use super::context::{Context, Source};
 ///
 /// ```
 /// # use std::str::FromStr;
-/// # use mail_types::Resource;
+/// # use mail_base::Resource;
 /// let data = vec![ 0x82, 0xA5, b'h', b'a', b'l', b'l', b'o', 0xA5, b'w', b'o', b'r', b'l', b'd' ];
 /// let media_type = "application/x.msgpack".parse().unwrap();
 /// let resource = Resource::sourceless(media_type, data);
@@ -110,7 +110,7 @@ use super::context::{Context, Source};
 /// depends on the implementation of `Context`/`ResourceLoaderComponent`.
 ///
 /// ```
-/// # use mail_types::{Resource, Source};
+/// # use mail_base::{Resource, Source};
 /// let source = Source {
 ///     // assuming the resource loader can handle a file scheme
 ///     // (through it might isolate it to a pseudo root dir or similar,
@@ -451,9 +451,9 @@ impl Resource {
     /// # Example
     /// ```
     /// # extern crate futures;
-    /// # extern crate mail_types;
-    /// # use mail_types::{Resource, ResourceAccessGuard};
-    /// # use mail_types::context::Context;
+    /// # extern crate mail_base;
+    /// # use mail_base::{Resource, ResourceAccessGuard};
+    /// # use mail_base::context::Context;
     /// # use futures::Future;
     /// fn load_resource_blocking<C>(resource: &Resource, ctx: C) -> ResourceAccessGuard
     ///     where C: Context

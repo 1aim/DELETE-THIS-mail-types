@@ -3,16 +3,16 @@ use std::env;
 
 use futures::Future;
 use soft_ascii_string::SoftAsciiString;
-use mail_types::file_buffer::FileBuffer;
+use mail_base::file_buffer::FileBuffer;
 use headers::header_components::{MediaType, Domain};
-use mail_types::{
+use mail_base::{
     Resource,
     IRI,
     Source,
     ResourceStateInfo
 };
-use mail_types::context::CompositeContext;
-use mail_types::default_impl::{FsResourceLoader, simple_cpu_pool, HashedIdGen, simple_context};
+use mail_base::context::CompositeContext;
+use mail_base::default_impl::{FsResourceLoader, simple_cpu_pool, HashedIdGen, simple_context};
 
 fn dumy_ctx(resource_loader: FsResourceLoader) -> simple_context::Context {
     let domain = Domain::from_unchecked("hy.test".to_owned());

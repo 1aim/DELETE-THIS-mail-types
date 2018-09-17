@@ -1,5 +1,5 @@
 
-# mail-types
+# mail-base
 
 **Provides the core mail type `Mail` for the `mail` crate.**
 
@@ -17,7 +17,7 @@ Especially such which are attachments or embedded images.
 extern crate futures;
 // Note that the `mail` crate provides a facade re-exporting
 // all relevant parts.
-extern crate mail_types;
+extern crate mail_base;
 extern crate mail_common;
 #[macro_use]
 extern crate mail_headers;
@@ -35,7 +35,7 @@ use mail_headers::{
 
 // In the facade this types (and the default_impl module)
 // are also exposed at top level
-use mail_types::{
+use mail_base::{
     Mail,
     default_impl::simple_context,
     error::MailError
@@ -74,7 +74,7 @@ fn main() {
 ```
 
 
-Documentation can be [viewed on docs.rs](https://docs.rs/mail-types)
+Documentation can be [viewed on docs.rs](https://docs.rs/mail-base)
 (once it is published).
 
 
