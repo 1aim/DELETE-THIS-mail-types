@@ -359,10 +359,10 @@ impl Embedded {
 
         let mut mail = resource.create_mail();
         if let Some(content_id) = content_id {
-            mail.insert_header(headers::ContentId::_body(content_id));
+            mail.insert_header(headers::ContentId::body(content_id));
         }
         let disposition = Disposition::new(disposition_kind, Default::default());
-        mail.insert_header(headers::ContentDisposition::_body(disposition));
+        mail.insert_header(headers::ContentDisposition::body(disposition));
         mail
     }
 }

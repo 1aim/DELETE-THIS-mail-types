@@ -210,7 +210,7 @@ impl Mail {
     /// independently of wether or not it was passed as media type.
     pub fn new_multipart_mail(content_type: MediaType, bodies: Vec<Mail>) -> Self {
         let mut headers = HeaderMap::new();
-        headers.insert(ContentType::_body(content_type));
+        headers.insert(ContentType::body(content_type));
         Mail {
             headers,
             body: MailBody::MultipleBodies {
@@ -487,11 +487,11 @@ fn auto_gen_headers<C: Context>(mail: &mut Mail, ctx: &C) {
     {
         let headers = mail.headers_mut();
         if !headers.contains(Date) {
-            headers.insert(Date::_body(DateTime::now()));
+            headers.insert(Date::body(DateTime::now()));
         }
 
         if !headers.contains(MessageId) {
-            headers.insert(MessageId::_body(ctx.generate_message_id()));
+            headers.insert(MessageId::body(ctx.generate_message_id()));
         }
     }
     recursive_auto_gen_headers(mail, ctx);
@@ -503,8 +503,8 @@ fn recursive_auto_gen_headers<C: Context>(mail: &mut Mail, ctx: &C) {
         &mut MailBody::SingleBody { ref mut body } => {
             let file_buffer = body.get_if_encoded()
                 .expect("[BUG] encoded mail, should only contain already transferencoded resources");
-            headers.insert(ContentType::_body(file_buffer.content_type().clone()));
-            headers.insert(ContentTransferEncoding::_body(file_buffer.transfer_encoding().clone()));
+            headers.insert(ContentType::body(file_buffer.content_type().clone()));
+            headers.insert(ContentTransferEncoding::body(file_buffer.transfer_encoding().clone()));
         },
         &mut MailBody::MultipleBodies { ref mut bodies, .. } => {
             let mut headers: &mut HeaderMap = headers;
@@ -703,7 +703,7 @@ mod test {
 
         test!(insert_header_set_a_header, {
             let mut mail = Mail::plain_text("r0");
-            mail.insert_header(Subject::body("hy")?);
+            mail.insert_header(Subject::auto_body("hy")?);
             assert!(mail.headers().contains(Subject));
         });
 
