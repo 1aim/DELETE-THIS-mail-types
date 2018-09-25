@@ -27,7 +27,8 @@ use headers::{
     headers::{
         ContentType, _From,
         ContentTransferEncoding,
-        Date, MessageId
+        Date, MessageId,
+        ContentDisposition
     },
     header_components::{
         DateTime,
@@ -505,6 +506,13 @@ fn recursive_auto_gen_headers<C: Context>(mail: &mut Mail, ctx: &C) {
                 .expect("[BUG] encoded mail, should only contain already transferencoded resources");
             headers.insert(ContentType::body(file_buffer.content_type().clone()));
             headers.insert(ContentTransferEncoding::body(file_buffer.transfer_encoding().clone()));
+
+            if let Some(Ok(disposition)) = headers.get_single_mut(ContentDisposition) {
+                let current_file_meta_mut = disposition.file_meta_mut();
+                let resource = body.get_if_encoded()
+                    .expect("[BUG] auto gen should only be called on all resources are loaded");
+                current_file_meta_mut.replace_empty_fields_with(resource.file_meta())
+            }
         },
         &mut MailBody::MultipleBodies { ref mut bodies, .. } => {
             let mut headers: &mut HeaderMap = headers;
