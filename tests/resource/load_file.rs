@@ -3,13 +3,13 @@ use std::env;
 
 use futures::Future;
 use soft_ascii_string::SoftAsciiString;
-use mail_base::file_buffer::FileBuffer;
 use headers::header_components::{MediaType, Domain};
 use mail_base::{
-    Resource,
+    EncData,
+    UseMediaType,
     IRI,
     Source,
-    ResourceStateInfo
+    context::Context,
 };
 use mail_base::context::CompositeContext;
 use mail_base::default_impl::{FsResourceLoader, simple_cpu_pool, HashedIdGen, simple_context};
@@ -21,7 +21,7 @@ fn dumy_ctx(resource_loader: FsResourceLoader) -> simple_context::Context {
     CompositeContext::new(resource_loader, simple_cpu_pool(), id_gen)
 }
 
-fn loaded_resource(path: &str, media_type: &str, name: Option<&str>) -> Resource {
+fn loaded_resource(path: &str, media_type: &str, name: Option<&str>) -> EncData {
     let resource_loader: FsResourceLoader = FsResourceLoader::new(
         env::current_dir().unwrap().join(Path::new("./test_resources/"))
     );
@@ -31,41 +31,25 @@ fn loaded_resource(path: &str, media_type: &str, name: Option<&str>) -> Resource
 
     let source = Source {
         iri: IRI::from_parts("path", path).unwrap(),
-        use_media_type: Some(MediaType::parse(media_type).unwrap()),
-        use_name: name.map(|s|s.to_owned()),
+        use_media_type: UseMediaType::Default(MediaType::parse(media_type).unwrap()),
+        use_file_name: name.map(|s|s.to_owned()),
     };
-    let resource = Resource::new(source);
 
-    resource.create_loading_future(ctx).wait().unwrap();
-
-    assert_eq!(resource.state_info(), ResourceStateInfo::Loaded);
-    resource
+    ctx.load_resource(&source).wait().unwrap()
 }
 
 
 #[test]
 fn get_name_from_path() {
-    let resource =
-        loaded_resource("img.png", "image/png", None);
-
-    let tenc_buffer = resource.get_if_encoded()
-        .expect("it to be encoded");
-
-    let fbuf: &FileBuffer  = &**tenc_buffer;
-
-    assert_eq!(fbuf.file_meta().file_name, Some("img.png".to_owned()));
+    let enc_data =  loaded_resource("img.png", "image/png", None);
+    assert_eq!(enc_data.file_meta().file_name, Some("img.png".to_owned()));
 }
 
 #[test]
 fn use_name_is_used() {
-    let resource =
+    let enc_data =
         loaded_resource("img.png", "image/png", Some("That Image"));
 
-    let tenc_buffer = resource.get_if_encoded()
-        .expect("it to be encoded");
-
-    let fbuf: &FileBuffer  = &**tenc_buffer;
-
-    assert_eq!(fbuf.file_meta().file_name, Some("That Image".to_owned()));
+    assert_eq!(enc_data.file_meta().file_name, Some("That Image".to_owned()));
 }
 

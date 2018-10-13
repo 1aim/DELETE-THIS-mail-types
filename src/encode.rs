@@ -13,14 +13,18 @@ use common::{
 };
 use headers::{
     HeaderName,
-    HeaderObj,
-    headers::ContentType
+    HeaderObj, HeaderObjTrait,
+    HeaderKind,
+    headers::{ContentTransferEncoding, ContentType}
 };
 
-use ::error::MailError;
-
-use super::{
-    Mail, EncodableMail
+use ::{
+    error::MailError,
+    mail::{
+        Mail,
+        EncodableMail,
+        assume_encoded
+    }
 };
 
 
@@ -72,6 +76,8 @@ fn encode_headers(
     top: bool,
     encoder:  &mut EncodingBuffer
 ) -> Result<(), MailError> {
+    use super::MailBody::*;
+
     let mut handle = encoder.writer();
     if top {
         handle.write_str(SoftAsciiStr::from_unchecked(
@@ -90,12 +96,21 @@ fn encode_headers(
             warn!("non `Content-` header in MIME body: {:?}: {:?}", name, hbody);
         }
 
-        encode_header(&mut handle, name, hbody)
-            .map_err(|err| {
-                err.with_place_or_else(|| Some(Place::Header { name: name.as_str() }))
-            })?;
+        encode_header(&mut handle, name, hbody)?;
     }
-    Ok( () )
+
+
+    match mail.body() {
+        SingleBody { ref body } => {
+            let data = assume_encoded(body);
+            let header = ContentTransferEncoding::body(data.encoding());
+            encode_header(&mut handle, header.name(), &header)?;
+            let header = ContentType::body(data.media_type().clone());
+            encode_header(&mut handle, header.name(), &header)?;
+        },
+        MultipleBodies { hidden_text:_, bodies:_ } => {}
+    }
+    Ok(())
 }
 
 fn encode_header(
@@ -103,12 +118,19 @@ fn encode_header(
     name: HeaderName,
     header: &HeaderObj
 ) -> Result<(), EncodingError> {
-    handle.write_str(name.as_ascii_str())?;
-    handle.write_char(SoftAsciiChar::from_unchecked(':'))?;
-    handle.write_fws();
-    header.encode(handle)?;
-    handle.finish_header();
-    Ok(())
+    //FIXME[rust/catch] use catch block
+    let res = (|| -> Result<(), EncodingError> {
+        handle.write_str(name.as_ascii_str())?;
+        handle.write_char(SoftAsciiChar::from_unchecked(':'))?;
+        handle.write_fws();
+        header.encode(handle)?;
+        handle.finish_header();
+        Ok(())
+    })();
+
+    res.map_err(|err| {
+        err.with_place_or_else(|| Some(Place::Header { name: name.as_str() }))
+    })
 }
 
 ///
@@ -119,12 +141,15 @@ fn encode_header(
 fn encode_mail_part(mail: &Mail, encoder:  &mut EncodingBuffer )
     -> Result<(), MailError>
 {
+    use super::MailBody::*;
+
     let minus = SoftAsciiChar::from_unchecked('-');
 
-    use super::MailBody::*;
     match mail.body() {
         SingleBody { ref body } => {
-            encoder.write_body_unchecked(body)?;
+            let data = assume_encoded(body);
+            let buffer = data.transfer_encoded_buffer();
+            encoder.write_body_unchecked(buffer);
         },
         MultipleBodies { ref hidden_text, ref bodies } => {
             if hidden_text.len() > 0 {

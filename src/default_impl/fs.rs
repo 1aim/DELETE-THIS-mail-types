@@ -1,22 +1,42 @@
-use std::path::{ PathBuf, Path };
-use std::fs::File;
-use std::io::{self, Read};
-use std::env;
-use std::marker::PhantomData;
+use std::{
+    path::{Path, PathBuf},
+    fs::{self, File},
+    io::{self, Read},
+    env,
+    marker::PhantomData,
+};
 
+use checked_command::CheckedCommand;
 use failure::Fail;
-use futures::{ future, IntoFuture};
+use futures::IntoFuture;
 
 use headers::header_components::{
     MediaType,
     FileMeta
 };
 
-use ::IRI;
-use ::utils::{ConstSwitch, Enabled, Disabled};
-use ::error::{ResourceLoadingError, ResourceLoadingErrorKind};
-use ::file_buffer::FileBuffer;
-use ::context::{ResourceLoaderComponent, OffloaderComponent, Source, LoadResourceFuture};
+use ::{
+    iri::IRI,
+    utils::{
+        SendBoxFuture,
+        ConstSwitch, Enabled
+    },
+    error::{
+        ResourceLoadingError,
+        ResourceLoadingErrorKind
+    },
+    resource:: {
+        Data,
+        EncData,
+        Source,
+        UseMediaType,
+        Metadata
+    },
+    context::{
+        Context,
+        ResourceLoaderComponent
+    }
+};
 
 // have a scheme ignoring variant for Mux as the scheme is preset
 // allow a setup with different scheme path/file etc. the behavior stays the same!
@@ -30,17 +50,14 @@ use ::context::{ResourceLoaderComponent, OffloaderComponent, Source, LoadResourc
 #[derive( Debug, Clone, PartialEq, Default )]
 pub struct FsResourceLoader<
     SchemeValidation: ConstSwitch = Enabled,
-    // we do not want to fix newlines for embeddings/attachments they get transfer encoded base64
-    // just for templates this makes sense
-    FixNewlines: ConstSwitch = Disabled,
 > {
     root: PathBuf,
     scheme: &'static str,
-    _marker: PhantomData<(SchemeValidation, FixNewlines)>
+    _marker: PhantomData<SchemeValidation>
 }
 
-impl<SVSw, NLSw> FsResourceLoader<SVSw, NLSw>
-    where SVSw: ConstSwitch, NLSw: ConstSwitch
+impl<SVSw> FsResourceLoader<SVSw>
+    where SVSw: ConstSwitch
 {
 
     const DEFAULT_SCHEME: &'static str = "path";
@@ -78,13 +95,12 @@ impl<SVSw, NLSw> FsResourceLoader<SVSw, NLSw>
 }
 
 
-impl<ValidateScheme, FixNewlines> ResourceLoaderComponent
-    for FsResourceLoader<ValidateScheme, FixNewlines>
-    where ValidateScheme: ConstSwitch, FixNewlines: ConstSwitch
+impl<ValidateScheme> ResourceLoaderComponent for FsResourceLoader<ValidateScheme>
+    where ValidateScheme: ConstSwitch
 {
 
-    fn load_resource<O>( &self, source: &Source, offload: &O) -> LoadResourceFuture
-        where O: OffloaderComponent
+    fn load_resource(&self, source: &Source, ctx: &impl Context)
+        -> SendBoxFuture<EncData, ResourceLoadingError>
     {
         if ValidateScheme::ENABLED && !self.iri_has_compatible_scheme(&source.iri) {
             let err = ResourceLoadingError
@@ -95,13 +111,15 @@ impl<ValidateScheme, FixNewlines> ResourceLoaderComponent
         }
 
         let path = self.root().join(path_from_tail(&source.iri));
-        let media_type = source.use_media_type.clone();
-        let name = source.use_name.clone();
+        let use_media_type = source.use_media_type.clone();
+        let use_file_name = source.use_file_name.clone();
 
-        offload.offload(
-            future::lazy(move || {
-                load_file_buffer::<FixNewlines>(path, media_type, name)
-            })
+        load_data(
+            path,
+            use_media_type,
+            use_file_name,
+            ctx,
+            |data| Ok(data.transfer_encode(Default::default()))
         )
     }
 }
@@ -112,45 +130,57 @@ impl<ValidateScheme, FixNewlines> ResourceLoaderComponent
 // now this has new responsibilities
 // 2. get and create File Meta
 // 3. if source.media_type.is_none() do cautious mime sniffing
-fn load_file_buffer<
-    FixNewlines: ConstSwitch
->(path: PathBuf, media_type: Option<MediaType>, name: Option<String>)
-    -> Result<FileBuffer, ResourceLoadingError>
+pub fn load_data<R, F>(
+    path: PathBuf,
+    use_media_type: UseMediaType,
+    use_file_name: Option<String>,
+    ctx: &impl Context,
+    post_process: F,
+) -> SendBoxFuture<R, ResourceLoadingError>
+    where R: Send + 'static,
+          F: FnOnce(Data) -> Result<R, ResourceLoadingError> + Send + 'static
 {
+    let content_id = ctx.generate_content_id();
+    ctx.offload_fn(move || {
+        let mut fd = File::open(&path)
+            .map_err(|err| {
+                if err.kind() == io::ErrorKind::NotFound {
+                    err.context(ResourceLoadingErrorKind::NotFound)
+                } else {
+                    err.context(ResourceLoadingErrorKind::LoadingFailed)
+                }
+            })?;
 
+        let mut file_meta = file_meta_from_metadata(fd.metadata()?);
 
-    let mut fd = File::open(&path)
-        .map_err(|err| {
-            if err.kind() == io::ErrorKind::NotFound {
-                err.context(ResourceLoadingErrorKind::NotFound)
-            } else {
-                err.context(ResourceLoadingErrorKind::LoadingFailed)
-            }
-        })?;
-
-    let mut file_meta = file_meta_from_metadata(fd.metadata()?);
-    if let Some(name) = name {
-        file_meta.file_name = Some(name)
-    } else {
-        file_meta.file_name = path.file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-    }
-
-    let mut buffer = Vec::new();
-    fd.read_to_end(&mut buffer)?;
-
-    if FixNewlines::ENABLED {
-        buffer = fix_newlines(buffer);
-    }
-
-    let media_type =
-        if let Some(mt) = media_type {
-            mt
+        if let Some(name) = use_file_name {
+            file_meta.file_name = Some(name)
         } else {
-            sniff_media_type(&buffer)?
-        };
+            file_meta.file_name = path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        }
 
-    Ok(FileBuffer::with_file_meta(media_type, buffer, file_meta))
+        let mut buffer = Vec::new();
+        fd.read_to_end(&mut buffer)?;
+
+        let media_type =
+            match use_media_type {
+                UseMediaType::Auto => {
+                    sniff_media_type(&buffer)?
+                },
+                UseMediaType::Default(media_type) => {
+                    media_type
+                }
+            };
+
+        let data = Data::new(buffer, Metadata {
+            file_meta,
+            content_id,
+            media_type,
+        });
+
+        post_process(data)
+    })
 
 }
 
@@ -159,26 +189,8 @@ fn sniff_media_type(_buffer: &[u8]) -> Result<MediaType, ResourceLoadingError> {
     unimplemented!();
 }
 
-fn fix_newlines(buffer: Vec<u8>) -> Vec<u8> {
-    //TODO replace current stub impl with fix_newlines impl from mail-template
-    // and move fix_newlines to core
-    let mut hit_cr = false;
-    for bch in buffer.iter() {
-        match *bch {
-            b'\r' => if hit_cr { unimplemented!() } else { hit_cr=true; },
-            b'\n' => if !hit_cr { unimplemented!() } else { hit_cr=false; },
-            _ => if hit_cr { unimplemented!() } else {}
-        }
-    }
-    if hit_cr {
-        unimplemented!()
-    }
-    buffer
-}
-
-use std::fs::Metadata;
 //TODO implement From<MetaDate> for FileMeta instead of this
-fn file_meta_from_metadata(meta: Metadata) -> FileMeta {
+fn file_meta_from_metadata(meta: fs::Metadata) -> FileMeta {
     FileMeta {
         file_name: None,
         creation_date: meta.created().ok().map(From::from),
@@ -189,7 +201,7 @@ fn file_meta_from_metadata(meta: Metadata) -> FileMeta {
     }
 }
 
-fn get_file_size(meta: &Metadata) -> Option<u64> {
+fn get_file_size(meta: &fs::Metadata) -> Option<u64> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::MetadataExt;

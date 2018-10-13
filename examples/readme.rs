@@ -34,7 +34,7 @@ fn print_some_mail() -> Result<(), MailError> {
     let ctx = simple_context::new(domain, "xqi93".parse().expect("we know it's ascii"))
         .expect("this is basically: failed to get cwd from env");
 
-    let mut mail = Mail::plain_text("Hy there! 😁");
+    let mut mail = Mail::plain_text("Hy there! 😁", &ctx);
     mail.insert_headers(headers! {
         _From: [("I'm Awesome 😁", "bla@examle.com")],
         _To: ["unknow@example.com"],
@@ -43,7 +43,7 @@ fn print_some_mail() -> Result<(), MailError> {
 
     // We don't added any think which needs loading but we could have
     // and all of it would have been loaded concurrent and async.
-    let encoded = mail.into_encodeable_mail(ctx.clone())
+    let encoded = mail.into_encodable_mail(ctx.clone())
         .wait()?
         .encode_into_bytes(MailType::Ascii)?;
 

@@ -53,13 +53,12 @@ pub enum ResourceLoadingErrorKind {
     #[fail(display = "resource not found")]
     NotFound,
 
-    /// Loading the resource already failed before.
-    #[fail(display = "loading shared resource already failed before")]
-    SharedResourcePoisoned,
-
     /// The act of loading it failed (e.g. because of an I/0-Error)
     #[fail(display = "loading failed")]
-    LoadingFailed
+    LoadingFailed,
+
+    #[fail(display = "automatically detecting the media type failed")]
+    MediaTypeDetectionFailed
 }
 
 /// The loading of an Resource failed.
