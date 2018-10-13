@@ -25,6 +25,7 @@ extern crate futures_cpupool;
 extern crate mail_common as common;
 #[cfg_attr(test, macro_use)]
 extern crate mail_headers as headers;
+extern crate checked_command;
 
 
 #[macro_use]

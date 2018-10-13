@@ -166,7 +166,7 @@ pub fn load_data<R, F>(
         let media_type =
             match use_media_type {
                 UseMediaType::Auto => {
-                    sniff_media_type(&buffer)?
+                    sniff_media_type(&path)?
                 },
                 UseMediaType::Default(media_type) => {
                     media_type
@@ -184,9 +184,24 @@ pub fn load_data<R, F>(
 
 }
 
-fn sniff_media_type(_buffer: &[u8]) -> Result<MediaType, ResourceLoadingError> {
-    //TODO replace current stub impl with conservative_sniffing and move it to mail
-    unimplemented!();
+fn sniff_media_type(path: impl AsRef<Path>) -> Result<MediaType, ResourceLoadingError> {
+    //TODO replace current  impl with conservative sniffing
+    let output = CheckedCommand
+        ::new("file")
+        .args(&["--brief", "--mime"])
+        .arg(path.as_ref())
+        .output()
+        .map_err(|err| err.context(ResourceLoadingErrorKind::MediaTypeDetectionFailed))?;
+
+    let raw_media_type = String
+        ::from_utf8(output.stdout)
+        .map_err(|err| err.context(ResourceLoadingErrorKind::MediaTypeDetectionFailed))?;
+
+    let media_type = MediaType
+        ::parse(raw_media_type.trim())
+        .map_err(|err| err.context(ResourceLoadingErrorKind::MediaTypeDetectionFailed))?;
+
+    Ok(media_type)
 }
 
 //TODO implement From<MetaDate> for FileMeta instead of this
@@ -227,3 +242,21 @@ fn path_from_tail(path_iri: &IRI) -> &Path {
 }
 
 
+#[cfg(test)]
+mod tests {
+
+
+    mod sniff_media_type {
+        use super::super::*;
+
+        #[test]
+        fn works_reasonable_for_cargo_files() {
+            let res = sniff_media_type("./Cargo.lock")
+                .unwrap();
+
+            // it currently doesn't take advantage of file endings so
+            // all pure "text" will be text/plain
+            assert_eq!(res.as_str_repr(), "text/plain; charset=us-ascii");
+        }
+    }
+}

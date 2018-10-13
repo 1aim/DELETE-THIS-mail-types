@@ -22,6 +22,7 @@ mail-headers = { git="https://github.com/1aim/mail-headers" }
 chrono = "0.4"
 soft-ascii-string = "1.0"
 serde = { version="1.0", optional=true, features=["derive"] }
+checked_command = "0.2.2"
 
 [dependencies.mime]
 git="https://github.com/1aim/mime"
