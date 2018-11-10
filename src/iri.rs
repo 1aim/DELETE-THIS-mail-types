@@ -30,12 +30,18 @@ pub struct IRI {
 
 impl IRI {
 
-    /// create a new IRI from a scheme part and a tail part
+    /// Create a new IRI from a scheme part and a tail part.
+    ///
+    /// This will convert the scheme part into lower case before
+    /// using it.
     pub fn from_parts(scheme: &str, tail: &str) -> Result<Self, InvalidIRIScheme> {
         Self::validate_scheme(scheme)?;
         let scheme_len = scheme.len();
         let mut buffer = String::with_capacity(scheme_len + 1 + tail.len());
-        buffer.push_str(scheme);
+        for ch in scheme.chars() {
+            let ch = ch.to_ascii_lowercase();
+            buffer.push(ch);
+        }
         buffer.push(':');
         buffer.push_str(tail);
         Ok(IRI {
@@ -86,7 +92,9 @@ impl IRI {
         Ok(())
     }
 
-    /// the scheme part of the uri excluding the `:` seperator
+    /// The scheme part of the uri excluding the `:` seperator.
+    ///
+    /// The scheme is guaranteed to be lower case.
     ///
     /// # Example
     ///
@@ -169,5 +177,17 @@ mod test {
         // some strange but valid names
         assert!(IRI::new("c++:is valid").is_ok());
         assert!(IRI::new("c1+-.:is valid").is_ok());
+    }
+
+
+    #[test]
+    fn scheme_is_always_lower_case() {
+        let iri = IRI::new("FoO:bAr").unwrap();
+        assert_eq!(iri.scheme(), "foo");
+        assert_eq!(iri.tail(), "bAr");
+
+        let iri = IRI::from_parts("FoO", "bAr").unwrap();
+        assert_eq!(iri.scheme(), "foo");
+        assert_eq!(iri.tail(), "bAr");
     }
 }
