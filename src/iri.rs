@@ -1,4 +1,7 @@
-use std::str::FromStr;
+use std::{
+    str::FromStr,
+    mem
+};
 
 //TODO consider adding a str_context
 #[derive(Copy, Clone, Debug, Fail)]
@@ -90,6 +93,17 @@ impl IRI {
             return Err(InvalidIRIScheme);
         }
         Ok(())
+    }
+
+    /// Replaces the IRI with a IRI with new tail and same scheme.
+    ///
+    /// This will return the original tail.
+    pub fn replace_tail(&mut self, new_tail: &str) -> Self {
+        let new_iri = IRI
+            ::from_parts(self.scheme(), new_tail)
+            .unwrap();
+
+        mem::replace(self, new_iri)
     }
 
     /// The scheme part of the uri excluding the `:` seperator.
@@ -189,5 +203,14 @@ mod test {
         let iri = IRI::from_parts("FoO", "bAr").unwrap();
         assert_eq!(iri.scheme(), "foo");
         assert_eq!(iri.tail(), "bAr");
+    }
+
+    #[test]
+    fn replacing_tail_does_that() {
+        let mut iri = IRI::new("foo:bar/bazz").unwrap();
+        let old_iri = iri.replace_tail("zoobar");
+
+        assert_eq!(iri.as_str(), "foo:zoobar");
+        assert_eq!(old_iri.as_str(), "foo:bar/bazz");
     }
 }
