@@ -1,5 +1,13 @@
 use std::{
-    str::FromStr,
+    str::FromStr
+};
+
+#[cfg(feature="serde")]
+use std::fmt;
+#[cfg(feature="serde")]
+use serde::{
+    ser::{Serialize, Serializer},
+    de::{self, Deserialize, Deserializer, Visitor}
 };
 
 //TODO consider adding a str_context
@@ -153,6 +161,44 @@ impl Into<String> for IRI {
     }
 }
 
+#[cfg(feature="serde")]
+impl Serialize for IRI {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        serializer.serialize_str(self.as_str())
+    }
+}
+
+#[cfg(feature="serde")]
+impl<'de> Deserialize<'de> for IRI {
+
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: Deserializer<'de>
+    {
+        struct IRIVisitor;
+        impl<'de> Visitor<'de> for IRIVisitor {
+            type Value = IRI;
+
+            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                write!(formatter, "a string representing a IRI")
+            }
+
+            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                let iri = s.parse()
+                    .map_err(|err| E::custom(err))?;
+
+                Ok(iri)
+            }
+        }
+
+        deserializer.deserialize_str(IRIVisitor)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::IRI;
@@ -206,5 +252,25 @@ mod test {
 
         assert_eq!(new_iri.as_str(), "foo:zoobar");
         assert_eq!(iri.as_str(), "foo:bar/bazz");
+    }
+
+    #[cfg(feature="serde")]
+    #[test]
+    fn serde_works_for_str_iri() {
+        use serde_test::{Token, assert_tokens, assert_de_tokens};
+
+        let iri: IRI = "path:./my/joke.txt".parse().unwrap();
+
+        assert_tokens(&iri, &[
+            Token::Str("path:./my/joke.txt")
+        ]);
+
+        assert_de_tokens(&iri, &[
+            Token::String("path:./my/joke.txt"),
+        ]);
+
+        assert_de_tokens(&iri, &[
+            Token::BorrowedStr("path:./my/joke.txt"),
+        ]);
     }
 }

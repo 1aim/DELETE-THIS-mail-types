@@ -6,10 +6,14 @@ use ::{
     iri::IRI
 };
 
+#[cfg(feature="serde")]
+use serde::{Serialize, Deserialize};
+
 /// POD containing the IRI which should be used to laod a resource well as
 /// an optional file name to use and a description about how the content type
 /// should be handled.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Source {
 
     /// A International Resource Identifier pointing to a source
@@ -44,6 +48,7 @@ pub struct Source {
 /// depends on the context implementation.
 ///
 #[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub enum UseMediaType {
     /// Sniff content type if no content type was given from any other place.
     Auto,
@@ -57,4 +62,10 @@ pub enum UseMediaType {
 
     // /// Always use this content type even if it is known to have a different content type.
     // Override(MediaType)
+}
+
+impl Default for UseMediaType {
+    fn default() -> Self {
+        UseMediaType::Auto
+    }
 }

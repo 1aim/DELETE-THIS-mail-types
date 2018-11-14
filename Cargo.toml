@@ -10,6 +10,10 @@ readme = "./README.md"
 documentation = "https://docs.rs/mail-base"
 repository = "https://github.com/1aim/mail-base"
 
+[features]
+serde-impl = ["serde", "mail-headers/serde-impl"]
+default = ["default_impl_cpupool"]
+default_impl_cpupool = ["futures-cpupool"]
 
 [dependencies]
 failure = "0.1.2"
@@ -35,9 +39,5 @@ version = "0.1.5"
 
 [dev-dependencies]
 serde_json = "1.0"
-
-[features]
-partial-serialize = ["serde", "mail-headers/serde-impl"]
-default = ["default_impl_cpupool"]
-default_impl_cpupool = ["futures-cpupool"]
+serde_test = "1.0.80"
 

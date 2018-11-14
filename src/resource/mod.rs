@@ -2,6 +2,9 @@
 // used for more ergonomic helper constructors
 use ::context::Context;
 
+#[cfg(feature="serde")]
+use serde::{Serialize, Deserialize};
+
 // We can provide a resource through two ways
 // 1. providing a Source (iri + media_type_override + name override)
 // 2. providing the actual data
@@ -118,6 +121,8 @@ mod data;
 pub use self::source::*;
 pub use self::data::*;
 
+
+
 /// A enum specifying a "resource" for a mail.
 ///
 /// A resource represents any kind of actual data.
@@ -139,6 +144,7 @@ pub use self::data::*;
 /// of this library normally comes in contact with the third variant is by
 /// turning a encodable mail back into normal mail.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub enum Resource {
     /// Provide a source which specify what data to use.
     ///

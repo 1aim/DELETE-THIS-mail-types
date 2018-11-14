@@ -20,6 +20,9 @@
 use media_type::{MULTIPART, ALTERNATIVE, RELATED, MIXED};
 use vec1::Vec1;
 
+#[cfg(feature="serde")]
+use serde::{Serialize, Deserialize};
+
 use headers::{
     HeaderKind,
     headers,
@@ -109,25 +112,10 @@ pub struct MailParts {
 /// to create a attachment or a embedded resources other
 /// resources can refer to by the resources content id.
 ///
-//TODO check if this maybe should be enabled
-// through a wrapper type
-/// #  Partial Serialization (feature `partial-serialize`)
-///
-/// Normally this type is not serializeable but
-/// if the `partial-serialize` feature is enabled
-/// all fields expect the resource will be serialized.
-///
-/// This allows template engines which create mails
-/// and use serialization to access the fields to
-/// allow placing embeddings in the template date
-/// (e.g. a avatar picture) and automatically include
-/// it in the mail.
-///
 #[derive(Debug, Clone)]
-#[cfg_attr(feature="partial-serialize", derive(Serialize))]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Embedded {
     content_id: Option<ContentId>,
-    #[cfg_attr(feature="partial-serialize", serde(skip))]
     resource: Resource,
     disposition: DispositionKind,
 }

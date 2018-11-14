@@ -16,9 +16,12 @@ extern crate futures;
 extern crate rand;
 extern crate vec1;
 extern crate soft_ascii_string;
-#[cfg(feature="partial-serialize")]
-#[macro_use]
+
+#[cfg(feature="serde")]
 extern crate serde;
+#[cfg(all(test, feature="serde"))]
+extern crate serde_test;
+
 #[cfg(feature="default_impl_cpupool")]
 extern crate futures_cpupool;
 
@@ -48,3 +51,13 @@ pub use self::mail::*;
 
 pub use ::context::Context;
 
+
+
+#[cfg(all(feature="serde", not(feature="serde-impl")))]
+compile_error!(concat!(
+    "\n---------------------------------------\n",
+    " for serde use feature `serde-impl`,\n",
+    " `serde` can not be used as feature in\n",
+    " this crate due to limitations with Cargo\n",
+    "-----------------------------------------\n"
+));

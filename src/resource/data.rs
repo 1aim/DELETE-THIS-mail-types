@@ -1,7 +1,16 @@
 use std::{
     sync::Arc,
-    default::Default
+    default::Default,
+    ops::{Deref, DerefMut}
 };
+
+#[cfg(feature="serde")]
+use serde::{
+    Serialize, Deserialize,
+    ser::{Serializer},
+    de::{Deserializer}
+};
+
 use common::bind::{base64, quoted_printable};
 use headers::header_components::{
     MediaType,
@@ -9,6 +18,8 @@ use headers::header_components::{
     TransferEncoding,
     ContentId
 };
+
+
 
 /// POD type containing FileMeta, Content-Type and Content-Id
 ///
@@ -26,7 +37,8 @@ use headers::header_components::{
 /// As Content-Id's are supposed to be world unique they could also
 /// be used for some caching and similar but that plays hardly any
 /// role any more, except maybe for "external" mail bodies.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Metadata {
     /// File meta like file name or file read time.
     pub file_meta: FileMeta,
@@ -36,6 +48,20 @@ pub struct Metadata {
 
     /// The content id associated with the data.
     pub content_id: ContentId
+}
+
+impl Deref for Metadata {
+    type Target = FileMeta;
+
+    fn deref(&self) -> &Self::Target {
+        &self.file_meta
+    }
+}
+
+impl DerefMut for Metadata {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.file_meta
+    }
 }
 
 /// A type containing some data and metadata for it.
@@ -53,8 +79,12 @@ pub struct Metadata {
 /// `Data` is made to be cheap to clone and share.
 /// For this it uses `Arc` internally.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct Data {
+    #[cfg_attr(feature="serde", serde(with="arc_buffer_serde"))]
     buffer: Arc<[u8]>,
+    #[cfg_attr(feature="serde", serde(flatten))]
+    #[cfg_attr(feature="serde", serde(with="arc_serde"))]
     meta: Arc<Metadata>
 }
 
@@ -135,8 +165,12 @@ impl Data {
 /// `Data` is made to be cheap to clone and share.
 /// For this it uses `Arc` internally.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub struct EncData {
+    #[cfg_attr(feature="serde", serde(with="arc_buffer_serde"))]
     buffer: Arc<[u8]>,
+    #[cfg_attr(feature="serde", serde(flatten))]
+    #[cfg_attr(feature="serde", serde(with="arc_serde"))]
     meta: Arc<Metadata>,
     encoding: TransferEncoding
 }
@@ -208,6 +242,7 @@ impl EncData {
 
 /// Hint to change how data should be transfer encoded.
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature="serde", derive(Serialize, Deserialize))]
 pub enum TransferEncodingHint {
     /// Use Base64 encoding.
     UseBase64,
@@ -226,6 +261,7 @@ pub enum TransferEncodingHint {
     /// No hint for transfer encoding.
     NoHint,
 
+    #[cfg_attr(feature="serde", serde(skip))]
     #[doc(hidden)]
     __NonExhaustive { }
 }
@@ -275,3 +311,38 @@ fn tenc_quoted_printable(data: &Data) -> EncData {
         TransferEncoding::QuotedPrintable)
 }
 
+
+
+mod arc_buffer_serde {
+    use super::*;
+
+    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<Arc<[u8]>, D::Error>
+        where D: Deserializer<'de>
+    {
+        let bytes = <Vec<u8>>::deserialize(deserializer)?;
+        Ok(bytes.into())
+    }
+
+    pub(crate) fn serialize<S>(data: &Arc<[u8]>, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer
+    {
+        serializer.serialize_bytes(data)
+    }
+}
+
+mod arc_serde {
+    use super::*;
+
+    pub(crate) fn deserialize<'de, OUT, D>(deserializer: D) -> Result<Arc<OUT>, D::Error>
+        where D: Deserializer<'de>, OUT: Deserialize<'de>
+    {
+        let value = OUT::deserialize(deserializer)?;
+        Ok(Arc::new(value))
+    }
+
+    pub(crate) fn serialize<S, IN>(data: &Arc<IN>, serializer: S) -> Result<S::Ok, S::Error>
+        where S: Serializer, IN: Serialize
+    {
+        IN::serialize(&**data, serializer)
+    }
+}
