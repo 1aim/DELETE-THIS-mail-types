@@ -1,4 +1,4 @@
-extern crate mail_base;
+extern crate mail_core;
 extern crate mail_headers as headers;
 
 extern crate futures;

@@ -71,7 +71,7 @@ use ::{
 ///
 /// ```
 /// # extern crate futures;
-/// # extern crate mail_base;
+/// # extern crate mail_core;
 /// # extern crate mail_internals;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// # use futures::Future;
@@ -82,7 +82,7 @@ use ::{
 ///     headers::*,
 ///     header_components::Domain
 /// };
-/// use mail_base::{
+/// use mail_core::{
 ///     Mail, Resource,
 ///     default_impl::simple_context
 /// };
@@ -117,15 +117,15 @@ use ::{
 /// builder:
 ///
 /// ```
-/// # extern crate mail_base;
+/// # extern crate mail_core;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// // either from `mail::headers` or from `mail_header as headers`
 /// use headers::{
 ///     headers::*,
 /// #   header_components::Domain
 /// };
-/// use mail_base::{Mail,  Resource};
-/// # use mail_base::default_impl::simple_context;
+/// use mail_core::{Mail,  Resource};
+/// # use mail_core::default_impl::simple_context;
 ///
 /// # fn main() {
 /// # let domain = Domain::from_unchecked("example.com".to_owned());
@@ -144,7 +144,7 @@ use ::{
 /// with a made up `multipart` type.
 ///
 /// ```
-/// # extern crate mail_base;
+/// # extern crate mail_core;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// // either from `mail::headers` or from `mail_header as headers`
 /// use headers::{
@@ -154,8 +154,8 @@ use ::{
 /// #       Domain,
 ///     }
 /// };
-/// use mail_base::{Mail, Resource};
-/// # use mail_base::default_impl::simple_context;
+/// use mail_core::{Mail, Resource};
+/// # use mail_core::default_impl::simple_context;
 ///
 /// # fn main() {
 /// # let domain = Domain::from_unchecked("example.com".to_owned());

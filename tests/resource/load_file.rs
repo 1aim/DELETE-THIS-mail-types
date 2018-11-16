@@ -4,15 +4,15 @@ use std::env;
 use futures::Future;
 use soft_ascii_string::SoftAsciiString;
 use headers::header_components::{MediaType, Domain};
-use mail_base::{
+use mail_core::{
     EncData,
     UseMediaType,
     IRI,
     Source,
     context::Context,
 };
-use mail_base::context::CompositeContext;
-use mail_base::default_impl::{FsResourceLoader, simple_cpu_pool, HashedIdGen, simple_context};
+use mail_core::context::CompositeContext;
+use mail_core::default_impl::{FsResourceLoader, simple_cpu_pool, HashedIdGen, simple_context};
 
 fn dumy_ctx(resource_loader: FsResourceLoader) -> simple_context::Context {
     let domain = Domain::from_unchecked("hy.test".to_owned());

@@ -1,5 +1,5 @@
 [package]
-name = "mail-base"
+name = "mail-core"
 version = "0.6.0-wip"
 description = "[internal/mail-api] provides the Mail type for the mail-api crates (inkl. multipart mime bodies, builder and resource type)"
 authors = ["Philipp Korber <p.korber@1aim.com>"]
@@ -7,8 +7,8 @@ keywords = ["mail-api", "internal"]
 categories = []
 license = "MIT OR Apache-2.0"
 readme = "./README.md"
-documentation = "https://docs.rs/mail-base"
-repository = "https://github.com/1aim/mail-base"
+documentation = "https://docs.rs/mail-core"
+repository = "https://github.com/1aim/mail-core"
 
 [features]
 serde-impl = ["serde", "mail-headers/serde-impl"]

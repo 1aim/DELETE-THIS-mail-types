@@ -1,7 +1,7 @@
 extern crate futures;
 // Note that the `mail` crate provides a facade re-exporting
 // all relevant parts.
-extern crate mail_base;
+extern crate mail_core;
 extern crate mail_internals;
 #[macro_use]
 extern crate mail_headers;
@@ -19,7 +19,7 @@ use mail_headers::{
 
 // In the facade this types (and the default_impl module)
 // are also exposed at top level
-use mail_base::{
+use mail_core::{
     Mail,
     default_impl::simple_context,
     error::MailError

@@ -8,7 +8,7 @@
 //! # Example
 //!
 //! ```
-//! # extern crate mail_base as mail;
+//! # extern crate mail_core as mail;
 //! # extern crate mail_headers as headers;
 //! # use headers::header_components::Domain;
 //! # // It's re-exported in the facade under `default_impl`.
