@@ -20,7 +20,7 @@ use futures::{
 };
 use media_type::BOUNDARY;
 
-use common::{
+use internals::{
     MailType,
     encoder::EncodingBuffer
 };
@@ -72,10 +72,10 @@ use ::{
 /// ```
 /// # extern crate futures;
 /// # extern crate mail_base;
-/// # extern crate mail_common;
+/// # extern crate mail_internals;
 /// # #[macro_use] extern crate mail_headers as headers;
 /// # use futures::Future;
-/// # use mail_common::MailType;
+/// # use mail_internals::MailType;
 /// use std::str;
 /// // either from `mail::headers` or from `mail_header as headers`
 /// use headers::{

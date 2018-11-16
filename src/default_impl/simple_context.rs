@@ -31,7 +31,7 @@ use std::io;
 use soft_ascii_string::SoftAsciiString;
 use futures_cpupool::{Builder, CpuPool};
 
-use common::error::EncodingError;
+use internals::error::EncodingError;
 use headers::header_components::Domain;
 
 use ::context::CompositeContext;

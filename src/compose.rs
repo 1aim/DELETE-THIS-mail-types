@@ -53,6 +53,7 @@ pub struct BodyPart {
     /// A body created by a template.
     pub resource: Resource,
 
+    //TODO split in inline_embeddings, attachments ->
     /// Embeddings added by the template engine.
     ///
     /// It is a mapping of the name under which a embedding had been made available in the
@@ -95,6 +96,7 @@ pub struct MailParts {
     /// shown if possible.
     pub alternative_bodies: Vec1<BodyPart>,
 
+    //TODO split in to vec inline_embeddings, attachments
     /// A number of embeddings.
     ///
     /// Depending on the disposition of the embeddings they will be either

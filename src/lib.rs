@@ -25,7 +25,7 @@ extern crate serde_test;
 #[cfg(feature="default_impl_cpupool")]
 extern crate futures_cpupool;
 
-extern crate mail_common as common;
+extern crate mail_internals as common;
 #[cfg_attr(test, macro_use)]
 extern crate mail_headers as headers;
 extern crate checked_command;

@@ -11,7 +11,7 @@ use serde::{
     de::{Deserializer}
 };
 
-use common::bind::{base64, quoted_printable};
+use internals::bind::{base64, quoted_printable};
 use headers::header_components::{
     MediaType,
     FileMeta,

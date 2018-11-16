@@ -5,7 +5,7 @@ use std::hash::Hasher;
 use rand;
 use soft_ascii_string::SoftAsciiString;
 
-use common::error::EncodingError;
+use internals::error::EncodingError;
 use headers::header_components::{MessageId, ContentId, Domain};
 use ::context::MailIdGenComponent;
 

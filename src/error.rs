@@ -4,7 +4,7 @@ use std::io;
 
 use failure::{Fail, Context, Backtrace};
 
-use common::error::EncodingError;
+use internals::error::EncodingError;
 use headers::error::{
     BuildInValidationError,
     HeaderTypeError, ComponentCreationError,

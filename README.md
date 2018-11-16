@@ -18,14 +18,14 @@ extern crate futures;
 // Note that the `mail` crate provides a facade re-exporting
 // all relevant parts.
 extern crate mail_base;
-extern crate mail_common;
+extern crate mail_internals;
 #[macro_use]
 extern crate mail_headers;
 
 use std::str;
 use futures::Future;
 
-use mail_common::MailType;
+use mail_internals::MailType;
 
 // In the facade this is the `headers` module.
 use mail_headers::{

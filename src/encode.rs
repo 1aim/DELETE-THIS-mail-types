@@ -5,7 +5,7 @@ use soft_ascii_string::{
 };
 use media_type::BOUNDARY;
 
-use common::{
+use internals::{
     encoder::{
         EncodingBuffer, EncodingWriter,
     },

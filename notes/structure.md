@@ -1,3 +1,4 @@
+# **Warning: document is not up to date**
 
 # Naming differences
 
@@ -7,25 +8,25 @@
 - `mail-codec-composition` => `mail-encode-compose`
 - `mail-codec-composition/smtp` => `mail-tokio-smtp/encode`
 - `mail-headers` => `mail-headers/encode`
-- `mail-common` => `mail-core/encode`
+- `mail-internals` => `mail-core/encode`
 
 
 # Dependency Chart
 
+(updated)
 ```ascii
-                                   mail
-                 __________________/  \______
-  mail-tokio-smtp*    /        /             \
-     |     |         /        /               \
-     |     mail-compose      /                 \
-     |             |        /                   \
-     \-----------mail-encode____           _____mail-parse <--\
-                     |          \         /       |            |
-                     |          mail-headers*     |       move HeaderMap and other
-                      \_________    |     _______/        header stuff here
-                                \   |    /                             /\
-                                 \  |   /                               |
-                                 mail-common*        --->current place-/
+
+
+                       mail-smtp    mail-templates   (maybe at some point)mail-parser
+new-tokio-smtp---------/ |              | \                                 |
+                         |              |  \-handle-bars                    |
+        <[mail-core]>----/--------------/-----------------------------------/
+              |
+              |
+            mail-headers
+              |
+              |
+            mail-internals
 ```
 
 crates marked with a * have both parser and encoder specific parts,
@@ -46,7 +47,7 @@ base64, percent-encode and similar.
 ## Mail-Headers
 
 A create providing implementations for the most
-common headers. Like `mail-core` encoding/parsing specific
+mail-internals headers. Like `mail-core` encoding/parsing specific
 parts can be enabled/disabled using the `encode`/`decode`
 feature. A Header basically consists of a name and a Header component,
 which can be encoded and represents the header field.
